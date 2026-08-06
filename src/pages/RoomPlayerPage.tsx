@@ -22,9 +22,7 @@ export function RoomPlayerPage({ routeRoomId }: { routeRoomId: string | null }) 
   const roomName = player.snapshot.room?.name ?? configuredRoomId;
   const slideDuration = player.snapshot.tribute?.slideDuration ?? player.snapshot.session?.slideDuration ?? 5;
   const playing =
-    player.snapshot.session?.status === "PLAYING" &&
-    player.snapshot.tribute?.status === "ACTIVE" &&
-    player.queue.length > 0;
+    player.snapshot.session?.status === "PLAYING" && player.queue.length > 0;
   const tracks = useMemo(() => player.snapshot.playlist?.tracks ?? [], [player.snapshot.playlist?.tracks]);
 
   if (!device.configured) {
