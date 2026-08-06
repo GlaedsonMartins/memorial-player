@@ -6,6 +6,7 @@ import { StatusOverlay } from "../components/StatusOverlay";
 import { useKioskHardening } from "../hooks/useKioskHardening";
 import { useDeviceSession } from "../hooks/useDeviceSession";
 import { usePlayerSnapshot } from "../hooks/usePlayerSnapshot";
+import { isPlayable } from "../services/playerService";
 
 export function RoomPlayerPage({ routeRoomId }: { routeRoomId: string | null }) {
   useKioskHardening();
@@ -21,8 +22,7 @@ export function RoomPlayerPage({ routeRoomId }: { routeRoomId: string | null }) 
 
   const roomName = player.snapshot.room?.name ?? configuredRoomId;
   const slideDuration = player.snapshot.tribute?.slideDuration ?? player.snapshot.session?.slideDuration ?? 5;
-  const playing =
-    player.snapshot.session?.status === "PLAYING" && player.queue.length > 0;
+  const playing = isPlayable(player.snapshot) && player.queue.length > 0;
   const tracks = useMemo(() => player.snapshot.playlist?.tracks ?? [], [player.snapshot.playlist?.tracks]);
 
   if (!device.configured) {

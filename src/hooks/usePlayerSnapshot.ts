@@ -111,7 +111,7 @@ export function usePlayerSnapshot(roomId: string, deviceId: string, authenticate
   }, [authenticated, session?.playlistId, session?.status, tribute?.playlistId]);
 
   useEffect(() => {
-    if (!tribute) {
+    if (!tribute || session?.status !== "PLAYING") {
       setQueue([]);
       return;
     }
@@ -132,7 +132,7 @@ export function usePlayerSnapshot(roomId: string, deviceId: string, authenticate
       cancelled = true;
       revokeCachedObjectUrls();
     };
-  }, [playlist?.tracks, tribute]);
+  }, [playlist?.tracks, session?.status, tribute]);
 
   useEffect(() => {
     saveSnapshot(roomId, snapshot);
