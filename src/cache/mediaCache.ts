@@ -30,6 +30,20 @@ export async function cacheMedia(items: CacheableMedia[]) {
     await Promise.all(
       items.map(async (item) => {
         if (!item.url) return;
+
+        let targetUrl = item.url;
+        try {
+          const url = new URL(item.url);
+          if (url.origin !== window.location.origin) {
+            resolved.set(item.url, item.url);
+            return;
+          }
+        } catch {
+          // If URL parsing fails, fallback to original URL.
+          resolved.set(item.url, item.url);
+          return;
+        }
+
         try {
           const cached = await cache.match(item.url);
           if (!cached) {
@@ -39,10 +53,12 @@ export async function cacheMedia(items: CacheableMedia[]) {
               // A failed media download should not stop playback; use remote URL as fallback.
             }
           }
-          resolved.set(item.url, await cachedObjectUrl(cache, item.url));
+          targetUrl = await cachedObjectUrl(cache, item.url);
         } catch {
-          resolved.set(item.url, item.url);
+          targetUrl = item.url;
         }
+
+        resolved.set(item.url, targetUrl);
       }),
     );
 
