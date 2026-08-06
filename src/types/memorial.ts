@@ -54,6 +54,9 @@ export interface DeviceConfig {
   roomId: string;
   deviceToken: string;
   setupCompleted: true;
+  // Optional helper fields saved locally
+  playerUrl?: string;
+  roomNumber?: number;
 }
 
 export interface RegisteredDevice {

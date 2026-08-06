@@ -1,4 +1,4 @@
-import { signInWithCustomToken, signOut } from "firebase/auth";
+import { signInWithCustomToken, signOut, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
 import { getFirebaseAuth, getFirebaseFunctions } from "../firebase/client";
 import type { ActiveRoomOption, DeviceConfig } from "../types/memorial";
@@ -26,10 +26,28 @@ export async function registerDevice(deviceName: string, roomId: string) {
     "registerDevice",
   );
   const result = await callable({ deviceName, roomId });
-  await signInWithCustomToken(getFirebaseAuth(), result.data.customToken);
-  const config = { ...result.data };
+  const auth = getFirebaseAuth();
+  // Ensure persistence is set before signing in
+  await setPersistence(auth, browserLocalPersistence);
+  await signInWithCustomToken(auth, result.data.customToken);
+
+  // Compute playerUrl/roomNumber from roomId (e.g. room-01 -> /sala/1)
+  const match = (result.data.roomId || "").match(/(\d+)$/);
+  const roomNumber = match ? parseInt(match[1], 10) : undefined;
+  const playerUrl = roomNumber ? `/sala/${roomNumber}` : `/sala/${result.data.roomId}`;
+
+  const config = { ...result.data } as DeviceConfig & Partial<DeviceSessionResult>;
   delete (config as Partial<DeviceSessionResult>).customToken;
-  return config;
+  if (roomNumber) config.roomNumber = roomNumber;
+  config.playerUrl = playerUrl;
+
+  if (import.meta.env.DEV) {
+    console.debug("registerDevice result:", result.data);
+    console.debug("signed in uid:", auth.currentUser?.uid ?? null);
+    console.debug("calculated playerUrl:", playerUrl);
+  }
+
+  return config as DeviceConfig;
 }
 
 export async function refreshDeviceSession(config: DeviceConfig) {
@@ -41,9 +59,22 @@ export async function refreshDeviceSession(config: DeviceConfig) {
     deviceId: config.deviceId,
     deviceToken: config.deviceToken,
   });
-  await signInWithCustomToken(getFirebaseAuth(), result.data.customToken);
-  const nextConfig = { ...result.data };
+  const auth = getFirebaseAuth();
+  await setPersistence(auth, browserLocalPersistence);
+  await signInWithCustomToken(auth, result.data.customToken);
+
+  const nextConfig = { ...result.data } as DeviceConfig & Partial<DeviceSessionResult>;
   delete (nextConfig as Partial<DeviceSessionResult>).customToken;
+  const match = (nextConfig.roomId || "").match(/(\d+)$/);
+  const roomNumber = match ? parseInt(match[1], 10) : undefined;
+  if (roomNumber) nextConfig.roomNumber = roomNumber;
+  nextConfig.playerUrl = roomNumber ? `/sala/${roomNumber}` : `/sala/${nextConfig.roomId}`;
+
+  if (import.meta.env.DEV) {
+    console.debug("refreshDeviceSession result:", result.data);
+    console.debug("signed in uid:", auth.currentUser?.uid ?? null);
+  }
+
   return { ...config, ...nextConfig };
 }
 

@@ -1,9 +1,9 @@
 import type { DeviceConfig } from "../types/memorial";
+import { DEVICE_CONFIG_KEY } from "../constants/storage";
 
 const DB_NAME = "memorial-player-device";
 const STORE_NAME = "config";
 const CONFIG_KEY = "current";
-const LOCAL_STORAGE_KEY = "memorial-player-device-config";
 
 function openDb() {
   return new Promise<IDBDatabase>((resolve, reject) => {
@@ -61,18 +61,18 @@ export async function loadDeviceConfig() {
     // Fall back to LocalStorage on restricted kiosk browsers.
   }
 
-  const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+  const raw = localStorage.getItem(DEVICE_CONFIG_KEY);
   if (!raw) return null;
   try {
     return JSON.parse(raw) as DeviceConfig;
   } catch {
-    localStorage.removeItem(LOCAL_STORAGE_KEY);
+    localStorage.removeItem(DEVICE_CONFIG_KEY);
     return null;
   }
 }
 
 export async function saveDeviceConfig(config: DeviceConfig) {
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(config));
+  localStorage.setItem(DEVICE_CONFIG_KEY, JSON.stringify(config));
   try {
     await writeIndexedDbConfig(config);
   } catch {
@@ -81,7 +81,7 @@ export async function saveDeviceConfig(config: DeviceConfig) {
 }
 
 export async function clearDeviceConfig() {
-  localStorage.removeItem(LOCAL_STORAGE_KEY);
+  localStorage.removeItem(DEVICE_CONFIG_KEY);
   try {
     await clearIndexedDbConfig();
   } catch {
