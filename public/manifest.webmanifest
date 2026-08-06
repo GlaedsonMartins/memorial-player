@@ -1,0 +1,10 @@
+{
+  "name": "Memorial Player",
+  "short_name": "Player",
+  "display": "fullscreen",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "start_url": "/setup",
+  "scope": "/",
+  "icons": []
+}

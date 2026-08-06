@@ -1,0 +1,36 @@
+{
+  "name": "memorial-player",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "provision:players": "node scripts/provisionPlayers.mjs",
+    "provision:access": "node scripts/provisionAccess.mjs"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.2.0",
+    "firebase": "^12.17.1",
+    "lucide-react": "^0.575.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwindcss": "^4.2.1",
+    "@tailwindcss/vite": "^4.2.1",
+    "vite": "^8.0.16"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.32.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "eslint": "^9.32.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.20",
+    "globals": "^15.15.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.56.1",
+    "firebase-admin": "^13.6.0"
+  }
+}
