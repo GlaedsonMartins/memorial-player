@@ -1,7 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { CheckCircle2, Loader2, MonitorUp, RotateCcw } from "lucide-react";
 import { saveDeviceConfig } from "../cache/deviceConfigStore";
+import type { DeviceConfig } from "../types/memorial";
 import { listActiveRooms, registerDevice } from "../services/deviceRegistrationService";
+import { getFirebaseAuth } from "../firebase/client";
 import type { ActiveRoomOption } from "../types/memorial";
 
 export function SetupPage() {
@@ -36,8 +38,31 @@ export function SetupPage() {
     setError(null);
     try {
       const config = await registerDevice(deviceName.trim(), roomId);
-      await saveDeviceConfig(config);
-      window.location.replace(`/sala/${config.roomId}`);
+
+      if (import.meta.env.DEV) {
+        console.debug("registerDevice returned:", config);
+      }
+
+      // Only save local configuration after authentication completed
+      const stored: DeviceConfig = {
+        deviceId: config.deviceId,
+        deviceName: config.deviceName,
+        roomId: config.roomId,
+        deviceToken: config.deviceToken,
+        setupCompleted: true,
+        playerUrl: config.playerUrl,
+        roomNumber: config.roomNumber,
+      } as DeviceConfig;
+
+      await saveDeviceConfig(stored);
+
+      if (import.meta.env.DEV) {
+        console.debug("saved device config:", stored);
+        console.debug("authenticated uid:", getFirebaseAuth().currentUser?.uid ?? null);
+      }
+
+      const redirectUrl = config.playerUrl ?? `/sala/${config.roomId}`;
+      window.location.replace(redirectUrl);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao registrar dispositivo.");
     } finally {

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import type { User } from "firebase/auth";
-import { hasFirebaseConfig } from "../firebase/client";
+import { hasFirebaseConfig, getFirebaseAuth } from "../firebase/client";
 import { clearDeviceConfig, loadDeviceConfig, saveDeviceConfig } from "../cache/deviceConfigStore";
 import { refreshDeviceSession, signOutDevice } from "../services/deviceRegistrationService";
 import { subscribeDevice } from "../services/playerService";
 import type { DeviceConfig } from "../types/memorial";
+import { onAuthStateChanged } from "firebase/auth";
 
 export function useDeviceSession({ redirectToSetup = true } = {}) {
   const [config, setConfig] = useState<DeviceConfig | null>(null);
@@ -20,10 +21,33 @@ export function useDeviceSession({ redirectToSetup = true } = {}) {
 
     let cancelled = false;
 
+    async function waitForAuthRestore() {
+      return new Promise<User | null>((resolve) => {
+        const auth = getFirebaseAuth();
+        const unsub = onAuthStateChanged(auth, (u) => {
+          unsub();
+          resolve(u);
+        });
+      });
+    }
+
     async function boot() {
       try {
+        // Wait until Firebase has restored the auth state
+        const restoredUser = await waitForAuthRestore();
+        if (import.meta.env.DEV) console.debug("auth restored user:", restoredUser?.uid ?? null);
+
         const stored = await loadDeviceConfig();
+
+        // If auth restoration finished and there's no authenticated user, go to setup
+        if (!restoredUser) {
+          if (import.meta.env.DEV) console.debug("redirecting to /setup: no authenticated user");
+          if (redirectToSetup) window.location.replace("/setup");
+          return;
+        }
+
         if (!stored?.setupCompleted) {
+          if (import.meta.env.DEV) console.debug("redirecting to /setup: no local configuration");
           if (redirectToSetup) window.location.replace("/setup");
           return;
         }
@@ -33,7 +57,7 @@ export function useDeviceSession({ redirectToSetup = true } = {}) {
 
         if (cancelled) return;
         setConfig(refreshed);
-        setUser({ uid: refreshed.deviceId } as User);
+        setUser(restoredUser);
       } catch (err) {
         await clearDeviceConfig();
         await signOutDevice().catch(() => undefined);
