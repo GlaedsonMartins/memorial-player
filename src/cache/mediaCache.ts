@@ -23,6 +23,18 @@ export async function cacheMedia(items: CacheableMedia[]) {
     return new Map<string, string>(items.map((item) => [item.url, item.url]));
   }
 
+  const allSameOrigin = items.every((item) => {
+    try {
+      return new URL(item.url).origin === window.location.origin;
+    } catch {
+      return false;
+    }
+  });
+
+  if (!allSameOrigin) {
+    return new Map<string, string>(items.map((item) => [item.url, item.url]));
+  }
+
   try {
     const cache = await caches.open(CACHE_NAME);
     const resolved = new Map<string, string>();
@@ -32,18 +44,6 @@ export async function cacheMedia(items: CacheableMedia[]) {
         if (!item.url) return;
 
         let targetUrl = item.url;
-        try {
-          const url = new URL(item.url);
-          if (url.origin !== window.location.origin) {
-            resolved.set(item.url, item.url);
-            return;
-          }
-        } catch {
-          // If URL parsing fails, fallback to original URL.
-          resolved.set(item.url, item.url);
-          return;
-        }
-
         try {
           const cached = await cache.match(item.url);
           if (!cached) {
