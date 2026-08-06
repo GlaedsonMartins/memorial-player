@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FirestoreError, Unsubscribe } from "firebase/firestore";
 import { cacheMedia, clearOldMedia, revokeCachedObjectUrls } from "../cache/mediaCache";
 import { clearSnapshot, loadSnapshot, saveSnapshot } from "../cache/sessionStore";
@@ -35,6 +35,7 @@ export function usePlayerSnapshot(roomId: string, deviceId: string, authenticate
   const [error, setError] = useState<string | null>(null);
   const [queue, setQueue] = useState<PlaybackItem[]>([]);
   const [cachedTracks, setCachedTracks] = useState<Map<string, string>>(new Map());
+  const lastSessionTributeId = useRef<string | null>(null);
 
   const snapshot = useMemo<PlayerSnapshot>(
     () => ({ room, session, tribute, playlist, settings }),
@@ -54,9 +55,21 @@ export function usePlayerSnapshot(roomId: string, deviceId: string, authenticate
       subscribeRoom(roomId, setRoom, onError),
       subscribeSession(roomId, (nextSession) => {
         setSession(nextSession);
-        if (!nextSession || nextSession.status === "ENDED") {
+        const nextTributeId = nextSession?.tributeId ?? null;
+        const shouldReset =
+          !nextSession ||
+          nextSession.status === "ENDED" ||
+          lastSessionTributeId.current !== nextTributeId;
+
+        if (shouldReset) {
+          lastSessionTributeId.current = nextTributeId;
           setTribute(null);
           setPlaylist(null);
+          setQueue([]);
+          setCachedTracks(new Map());
+        }
+
+        if (!nextSession || nextSession.status === "ENDED") {
           setState("IDLE");
           clearSnapshot(roomId);
         } else {
