@@ -123,7 +123,13 @@ export function usePlayerSnapshot(roomId: string, deviceId: string, authenticate
     void cacheMedia([...media, ...tracks]).then((cachedUrls) => {
       if (cancelled) return;
       setCachedTracks(new Map(tracks.map((track) => [track.url, cachedUrls.get(track.url) ?? track.url])));
-      setQueue(buildPlaybackQueue(tribute.photos, tribute.videos, cachedUrls));
+      const playbackQueue = buildPlaybackQueue(tribute.photos, tribute.videos, cachedUrls);
+      if (import.meta.env.DEV) {
+        console.debug("[usePlayerSnapshot] playbackQueue", playbackQueue);
+        console.debug("[usePlayerSnapshot] tribute.photos", tribute.photos);
+        console.debug("[usePlayerSnapshot] tribute.videos", tribute.videos);
+      }
+      setQueue(playbackQueue);
       void clearOldMedia([...media.map((item) => item.url), ...tracks.map((track) => track.url)]);
       setState(media.length > 0 ? "PLAYING" : "IDLE");
     });

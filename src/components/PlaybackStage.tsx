@@ -30,6 +30,13 @@ export function PlaybackStage({
   }, [current]);
 
   useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.debug("[PlaybackStage] current", current);
+      console.debug("[PlaybackStage] next", next);
+    }
+  }, [current, next]);
+
+  useEffect(() => {
     if (index >= queue.length) setIndex(0);
   }, [index, queue.length]);
 
