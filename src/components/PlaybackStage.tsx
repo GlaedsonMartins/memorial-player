@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PlaybackItem, SlideDuration } from "../types/memorial";
 
+function isImagePlaybackItem(item: PlaybackItem | null | undefined) {
+  if (!item) return false;
+  if (item.type === "image") return true;
+  return /\.(jpe?g|png|gif|webp|bmp|svg|avif|ico|heic|heif)(\?.*)?$/i.test(item.cachedUrl);
+}
+
 export function PlaybackStage({
   queue,
   slideDuration,
@@ -28,7 +34,7 @@ export function PlaybackStage({
   }, [index, queue.length]);
 
   useEffect(() => {
-    if (!current || current.type !== "image") return;
+    if (!isImagePlaybackItem(current)) return;
     onVideoModeChange(false);
     const timeout = window.setTimeout(() => {
       setHeldItem(null);
@@ -41,16 +47,20 @@ export function PlaybackStage({
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-black">
-      {next?.type === "image" && (
+      {isImagePlaybackItem(next) && (
         <img src={next.cachedUrl} alt="" className="hidden" draggable={false} />
       )}
-      {current.type === "image" ? (
+      {isImagePlaybackItem(current) ? (
         <img
           key={current.id}
           src={current.cachedUrl}
           alt=""
           className="player-fade-enter h-full w-full object-contain"
           draggable={false}
+          onError={() => {
+            setHeldItem(null);
+            setIndex((value) => (value + 1) % queue.length);
+          }}
         />
       ) : (
         <video
