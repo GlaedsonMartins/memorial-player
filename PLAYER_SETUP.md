@@ -26,6 +26,15 @@ npm.cmd run provision:access
 4. Abra `/setup` no mini PC e faca login com o usuario tecnico da sala, por exemplo `player-01@memorial.local`.
 5. Configure o sistema operacional para abrir a URL `/sala/{numero}` em modo kiosk.
 
+Para iniciar o Player com musica automatica, use o script incluido no projeto:
+
+```bat
+scripts\start-player-kiosk.bat 1 https://seu-player.exemplo.com
+```
+
+O primeiro argumento e o numero da sala. O segundo e opcional; sem ele, o script usa `http://localhost:8091`.
+O script abre uma instancia dedicada do Chrome com `--autoplay-policy=no-user-gesture-required`, permitindo que a homenagem inicie o audio sem clique.
+
 ## Firebase
 
 - Project ID: `memorial-cloud-5da8e`
