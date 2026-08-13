@@ -2,6 +2,7 @@ import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { browserLocalPersistence, getAuth, setPersistence, type Auth } from "firebase/auth";
 import { enableIndexedDbPersistence, getFirestore, type Firestore } from "firebase/firestore";
 import { getFunctions, type Functions } from "firebase/functions";
+import { getStorage, type FirebaseStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -21,6 +22,7 @@ let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
 let functions: Functions | null = null;
+let storage: FirebaseStorage | null = null;
 let persistenceStarted = false;
 
 function assertConfigured() {
@@ -65,4 +67,11 @@ export function getFirebaseFunctions() {
     functions = getFunctions(getFirebaseApp());
   }
   return functions;
+}
+
+export function getFirebaseStorage() {
+  if (!storage) {
+    storage = getStorage(getFirebaseApp());
+  }
+  return storage;
 }

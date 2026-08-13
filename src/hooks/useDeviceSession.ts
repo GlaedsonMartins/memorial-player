@@ -7,6 +7,17 @@ import { subscribeDevice } from "../services/playerService";
 import type { DeviceConfig } from "../types/memorial";
 import { onAuthStateChanged } from "firebase/auth";
 
+function errorCode(error: unknown) {
+  return typeof error === "object" && error && "code" in error
+    ? String((error as { code?: unknown }).code)
+    : "";
+}
+
+function isPermanentDeviceError(error: unknown) {
+  const code = errorCode(error);
+  return code.includes("not-found") || code.includes("invalid-argument");
+}
+
 export function useDeviceSession({ redirectToSetup = true } = {}) {
   const [config, setConfig] = useState<DeviceConfig | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -32,19 +43,13 @@ export function useDeviceSession({ redirectToSetup = true } = {}) {
     }
 
     async function boot() {
+      let stored: DeviceConfig | null = null;
       try {
         // Wait until Firebase has restored the auth state
         const restoredUser = await waitForAuthRestore();
         if (import.meta.env.DEV) console.debug("auth restored user:", restoredUser?.uid ?? null);
 
-        const stored = await loadDeviceConfig();
-
-        // If auth restoration finished and there's no authenticated user, go to setup
-        if (!restoredUser) {
-          if (import.meta.env.DEV) console.debug("redirecting to /setup: no authenticated user");
-          if (redirectToSetup) window.location.replace("/setup");
-          return;
-        }
+        stored = await loadDeviceConfig();
 
         if (!stored?.setupCompleted) {
           if (import.meta.env.DEV) console.debug("redirecting to /setup: no local configuration");
@@ -57,8 +62,16 @@ export function useDeviceSession({ redirectToSetup = true } = {}) {
 
         if (cancelled) return;
         setConfig(refreshed);
-        setUser(restoredUser);
+        setUser(getFirebaseAuth().currentUser);
       } catch (err) {
+        if (stored?.setupCompleted && !isPermanentDeviceError(err)) {
+          if (cancelled) return;
+          setConfig(stored);
+          setUser(getFirebaseAuth().currentUser);
+          setError(err instanceof Error ? err.message : "Falha temporaria ao atualizar sessao.");
+          return;
+        }
+
         await clearDeviceConfig();
         await signOutDevice().catch(() => undefined);
         if (cancelled) return;

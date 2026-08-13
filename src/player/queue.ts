@@ -19,8 +19,11 @@ export function buildPlaybackQueue(
   const normalizedPhotos = photos.map((item) => normalizeMediaItem(item, "image"));
   const normalizedVideos = videos.map((item) => normalizeMediaItem(item, "video"));
 
-  return [...normalizedPhotos.slice().sort(byOrder), ...normalizedVideos.slice().sort(byOrder)].map((item) => ({
-    ...item,
-    cachedUrl: cachedUrls.get(item.url) ?? item.url,
-  }));
+  return [...normalizedPhotos.slice().sort(byOrder), ...normalizedVideos.slice().sort(byOrder)].map((item) => {
+    const cachedUrl = cachedUrls.get(item.url) ?? cachedUrls.get(item.storagePath) ?? item.url ?? item.storagePath;
+    return {
+      ...item,
+      cachedUrl,
+    };
+  });
 }
