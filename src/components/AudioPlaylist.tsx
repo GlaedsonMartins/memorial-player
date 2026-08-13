@@ -8,20 +8,22 @@ type AudioStatusHandler = (status: AudioPlaybackStatus, message?: string) => voi
 export function AudioPlaylist({
   tracks,
   cachedTracks,
-  paused,
+  muted,
   onStatus,
 }: {
   tracks: PlaylistTrack[];
   cachedTracks: Map<string, string>;
-  paused: boolean;
+  muted: boolean;
   onStatus?: AudioStatusHandler;
 }) {
   const orderedTracks = useMemo(() => tracks.slice().sort((a, b) => a.order - b.order), [tracks]);
-  const [index, setIndex] = useState(0);
   const [status, setStatus] = useState<AudioPlaybackStatus>(
     orderedTracks.length > 0 ? "loading" : "empty",
   );
-  const trackKey = orderedTracks.map((track) => `${track.id}:${track.url}:${track.storagePath}`).join("|");
+  const [index, setIndex] = useState(0);
+  const trackKey = orderedTracks
+    .map((track) => `${track.id}:${track.url}:${track.storagePath}`)
+    .join("|");
   const currentTrack = orderedTracks[index % Math.max(orderedTracks.length, 1)];
   const source = currentTrack
     ? cachedTracks.get(currentTrack.url) ??
@@ -30,10 +32,8 @@ export function AudioPlaylist({
     : "";
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const onStatusRef = useRef(onStatus);
-  const pausedRef = useRef(paused);
   const sourceRef = useRef(source);
   onStatusRef.current = onStatus;
-  pausedRef.current = paused;
   sourceRef.current = source;
 
   function reportStatus(nextStatus: AudioPlaybackStatus, message?: string) {
@@ -43,7 +43,7 @@ export function AudioPlaylist({
 
   const attemptPlay = useCallback(async () => {
     const audio = audioRef.current;
-    if (!audio || pausedRef.current || !sourceRef.current) return;
+    if (!audio || !sourceRef.current) return;
     try {
       await audio.play();
       reportStatus("playing");
@@ -71,19 +71,19 @@ export function AudioPlaylist({
     const audio = audioRef.current;
     if (!audio || !source) return;
 
-    audio.pause();
     audio.load();
-    if (paused) {
-      reportStatus("paused");
-      return;
-    }
-
     reportStatus("loading");
     void attemptPlay();
-  }, [attemptPlay, paused, source]);
+  }, [attemptPlay, source]);
 
   useEffect(() => {
-    if (status !== "blocked" || paused) return;
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.muted = muted;
+  }, [muted]);
+
+  useEffect(() => {
+    if (status !== "blocked") return;
 
     const activateAudio = () => {
       void attemptPlay();
@@ -94,7 +94,7 @@ export function AudioPlaylist({
       window.removeEventListener("pointerdown", activateAudio, { capture: true });
       window.removeEventListener("keydown", activateAudio, { capture: true });
     };
-  }, [attemptPlay, paused, source, status]);
+  }, [attemptPlay, source, status]);
 
   if (!currentTrack) return null;
 
@@ -102,15 +102,13 @@ export function AudioPlaylist({
     <audio
       ref={audioRef}
       src={source}
-      autoPlay={!paused}
+      autoPlay
+      muted={muted}
       preload="auto"
       onCanPlay={() => {
-        if (!paused && status !== "playing") void attemptPlay();
+        if (status !== "playing") void attemptPlay();
       }}
       onPlay={() => reportStatus("playing")}
-      onPause={() => {
-        if (paused) reportStatus("paused");
-      }}
       onError={() => reportStatus("error", "A faixa nao pode ser carregada pelo Player.")}
       onEnded={() => {
         if (orderedTracks.length === 1) {

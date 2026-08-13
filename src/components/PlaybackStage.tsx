@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { PlaybackItem, SlideDuration } from "../types/memorial";
 
 function isImagePlaybackItem(item: PlaybackItem | null | undefined) {
@@ -10,21 +10,19 @@ function isImagePlaybackItem(item: PlaybackItem | null | undefined) {
 export function PlaybackStage({
   queue,
   slideDuration,
-  onVideoModeChange,
+  onCurrentItemChange,
 }: {
   queue: PlaybackItem[];
   slideDuration: SlideDuration;
-  onVideoModeChange: (active: boolean) => void;
+  onCurrentItemChange: (item: PlaybackItem | null) => void;
 }) {
   const [index, setIndex] = useState(0);
   const [heldItem, setHeldItem] = useState<PlaybackItem | null>(null);
   const current = queue[index % Math.max(queue.length, 1)] ?? heldItem;
-  const currentRef = useRef<PlaybackItem | null>(current);
   const next = useMemo(() => queue[(index + 1) % Math.max(queue.length, 1)], [index, queue]);
 
   useEffect(() => {
     if (current) {
-      currentRef.current = current;
       setHeldItem(current);
     }
   }, [current]);
@@ -37,18 +35,21 @@ export function PlaybackStage({
   }, [current, next]);
 
   useEffect(() => {
+    onCurrentItemChange(current ?? null);
+  }, [current, onCurrentItemChange]);
+
+  useEffect(() => {
     if (index >= queue.length) setIndex(0);
   }, [index, queue.length]);
 
   useEffect(() => {
     if (!isImagePlaybackItem(current)) return;
-    onVideoModeChange(false);
     const timeout = window.setTimeout(() => {
       setHeldItem(null);
       setIndex((value) => (value + 1) % queue.length);
     }, slideDuration * 1000);
     return () => window.clearTimeout(timeout);
-  }, [current, onVideoModeChange, queue.length, slideDuration]);
+  }, [current, queue.length, slideDuration]);
 
   if (!current) return null;
 
@@ -75,16 +76,14 @@ export function PlaybackStage({
           src={current.cachedUrl}
           className="h-full w-full object-contain"
           autoPlay
+          muted={current.videoMuted !== false}
           playsInline
           preload="auto"
-          onPlay={() => onVideoModeChange(true)}
           onEnded={() => {
-            onVideoModeChange(false);
             setHeldItem(null);
             setIndex((value) => (value + 1) % queue.length);
           }}
           onError={() => {
-            onVideoModeChange(false);
             setHeldItem(null);
             setIndex((value) => (value + 1) % queue.length);
           }}

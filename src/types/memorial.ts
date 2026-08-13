@@ -83,6 +83,7 @@ export interface MediaItem {
   type: MediaType;
   order: number;
   duration?: number;
+  videoMuted?: boolean;
   createdAt: Timestamp | null;
 }
 

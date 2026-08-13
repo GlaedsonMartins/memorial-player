@@ -7,11 +7,12 @@ import { useKioskHardening } from "../hooks/useKioskHardening";
 import { useDeviceSession } from "../hooks/useDeviceSession";
 import { usePlayerSnapshot } from "../hooks/usePlayerSnapshot";
 import { isPlayable } from "../services/playerService";
+import type { PlaybackItem } from "../types/memorial";
 
 export function RoomPlayerPage({ routeRoomId }: { routeRoomId: string | null }) {
   useKioskHardening();
   const device = useDeviceSession();
-  const [videoActive, setVideoActive] = useState(false);
+  const [activeMedia, setActiveMedia] = useState<PlaybackItem | null>(null);
   const [audioStatus, setAudioStatus] = useState<{
     status: AudioPlaybackStatus;
     message?: string;
@@ -28,6 +29,7 @@ export function RoomPlayerPage({ routeRoomId }: { routeRoomId: string | null }) 
   const slideDuration = player.snapshot.tribute?.slideDuration ?? player.snapshot.session?.slideDuration ?? 5;
   const playing = isPlayable(player.snapshot) && player.queue.length > 0;
   const tracks = useMemo(() => player.snapshot.playlist?.tracks ?? [], [player.snapshot.playlist?.tracks]);
+  const mutePlaylist = activeMedia?.type === "video" && activeMedia.videoMuted === false;
 
   if (!device.configured) {
     return <IdleScreen settings={null} roomName="Firebase nao configurado" />;
@@ -52,12 +54,12 @@ export function RoomPlayerPage({ routeRoomId }: { routeRoomId: string | null }) 
           <PlaybackStage
             queue={player.queue}
             slideDuration={slideDuration}
-            onVideoModeChange={setVideoActive}
+            onCurrentItemChange={setActiveMedia}
           />
           <AudioPlaylist
             tracks={tracks}
             cachedTracks={player.cachedTracks}
-            paused={videoActive}
+            muted={mutePlaylist}
             onStatus={(status, message) => setAudioStatus({ status, message })}
           />
           {audioStatus.status === "blocked" && (
