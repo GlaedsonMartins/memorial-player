@@ -122,7 +122,14 @@ export function usePlayerSnapshot(roomId: string, deviceId: string, authenticate
 
     void cacheMedia([...media, ...tracks]).then((cachedUrls) => {
       if (cancelled) return;
-      setCachedTracks(new Map(tracks.map((track) => [track.url, cachedUrls.get(track.url) ?? track.url])));
+      const nextCachedTracks = new Map<string, string>();
+      tracks.forEach((track) => {
+        const resolvedUrl =
+          cachedUrls.get(track.url) ?? cachedUrls.get(track.storagePath) ?? (track.url || track.storagePath);
+        if (track.url) nextCachedTracks.set(track.url, resolvedUrl);
+        if (track.storagePath) nextCachedTracks.set(track.storagePath, resolvedUrl);
+      });
+      setCachedTracks(nextCachedTracks);
       const playbackQueue = buildPlaybackQueue(tribute.photos, tribute.videos, cachedUrls);
       if (import.meta.env.DEV) {
         console.debug("[usePlayerSnapshot] playbackQueue", playbackQueue);

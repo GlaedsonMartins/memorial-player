@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AudioPlaylist } from "../components/AudioPlaylist";
+import { AudioPlaylist, type AudioPlaybackStatus } from "../components/AudioPlaylist";
 import { IdleScreen } from "../components/IdleScreen";
 import { PlaybackStage } from "../components/PlaybackStage";
 import { StatusOverlay } from "../components/StatusOverlay";
@@ -12,6 +12,10 @@ export function RoomPlayerPage({ routeRoomId }: { routeRoomId: string | null }) 
   useKioskHardening();
   const device = useDeviceSession();
   const [videoActive, setVideoActive] = useState(false);
+  const [audioStatus, setAudioStatus] = useState<{
+    status: AudioPlaybackStatus;
+    message?: string;
+  }>({ status: "empty" });
   const configuredRoomId = device.config?.roomId ?? routeRoomId ?? "";
   const routeAllowed = !routeRoomId || !device.config?.roomId || device.config.roomId === routeRoomId;
   const player = usePlayerSnapshot(
@@ -50,7 +54,31 @@ export function RoomPlayerPage({ routeRoomId }: { routeRoomId: string | null }) 
             slideDuration={slideDuration}
             onVideoModeChange={setVideoActive}
           />
-          <AudioPlaylist tracks={tracks} cachedTracks={player.cachedTracks} paused={videoActive} />
+          <AudioPlaylist
+            tracks={tracks}
+            cachedTracks={player.cachedTracks}
+            paused={videoActive}
+            onStatus={(status, message) => setAudioStatus({ status, message })}
+          />
+          {audioStatus.status === "blocked" && (
+            <button
+              type="button"
+              className="fixed bottom-6 left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/75 px-5 py-3 text-sm text-white shadow-lg backdrop-blur"
+              onClick={() => window.dispatchEvent(new PointerEvent("pointerdown"))}
+            >
+              Clique para ativar a musica
+            </button>
+          )}
+          {audioStatus.status === "empty" && tracks.length === 0 && (
+            <div className="fixed bottom-6 left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/65 px-4 py-2 text-xs text-white/85 backdrop-blur">
+              Esta homenagem nao possui musica configurada.
+            </div>
+          )}
+          {audioStatus.status === "error" && (
+            <div className="fixed bottom-6 left-1/2 z-20 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full bg-red-950/85 px-4 py-2 text-center text-xs text-red-100 backdrop-blur">
+              {audioStatus.message ?? "Nao foi possivel reproduzir a musica."}
+            </div>
+          )}
         </>
       ) : (
         <IdleScreen settings={player.snapshot.settings} roomName={roomName} />
