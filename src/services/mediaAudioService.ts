@@ -23,7 +23,9 @@ function canUseAudioGraph(element: HTMLMediaElement) {
   if (typeof window === "undefined") return false;
   try {
     const url = new URL(element.currentSrc || element.src, window.location.href);
-    return Boolean(url.origin || url.protocol === "blob:" || url.protocol === "data:");
+    const localSource =
+      url.origin === window.location.origin || url.protocol === "blob:" || url.protocol === "data:";
+    return localSource || Boolean(element.crossOrigin);
   } catch {
     return false;
   }
