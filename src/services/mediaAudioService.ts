@@ -6,6 +6,7 @@ type AudioGraph = {
 };
 
 const graphs = new WeakMap<HTMLMediaElement, AudioGraph>();
+const nativeFallbackElements = new Set<HTMLMediaElement>();
 let sharedAudioContext: AudioContext | null = null;
 
 function getAudioContext() {
@@ -18,10 +19,11 @@ function getAudioContext() {
 }
 
 function canUseAudioGraph(element: HTMLMediaElement) {
+  if (nativeFallbackElements.has(element)) return false;
   if (typeof window === "undefined") return false;
   try {
     const url = new URL(element.currentSrc || element.src, window.location.href);
-    return url.origin === window.location.origin || url.protocol === "blob:" || url.protocol === "data:";
+    return Boolean(url.origin || url.protocol === "blob:" || url.protocol === "data:");
   } catch {
     return false;
   }
@@ -80,6 +82,15 @@ export function disconnectMediaElement(element: HTMLMediaElement) {
   } finally {
     graphs.delete(element);
   }
+}
+
+export function disableMediaElementAudioGraph(element: HTMLMediaElement) {
+  nativeFallbackElements.add(element);
+  disconnectMediaElement(element);
+}
+
+export function enableMediaElementAudioGraph(element: HTMLMediaElement) {
+  nativeFallbackElements.delete(element);
 }
 
 declare global {

@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AudioSettings, PlaylistTrack } from "../types/memorial";
 import {
   connectMediaElement,
+  disableMediaElementAudioGraph,
   disconnectMediaElement,
+  enableMediaElementAudioGraph,
   resumeMediaAudio,
   setMediaElementGain,
 } from "../services/mediaAudioService";
@@ -40,6 +42,7 @@ export function AudioPlaylist({
     : "";
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioSettingsRef = useRef(audioSettings);
+  const nativeFallbackRef = useRef(false);
   const onStatusRef = useRef(onStatus);
   const sourceRef = useRef(source);
   onStatusRef.current = onStatus;
@@ -84,6 +87,7 @@ export function AudioPlaylist({
   }, []);
 
   useEffect(() => {
+    nativeFallbackRef.current = false;
     setIndex(0);
   }, [trackKey]);
 
@@ -97,6 +101,8 @@ export function AudioPlaylist({
     const audio = audioRef.current;
     if (!audio || !source) return;
 
+    enableMediaElementAudioGraph(audio);
+    audio.crossOrigin = "anonymous";
     setMediaElementGain(
       audio,
       audioSettingsRef.current.masterVolume * audioSettingsRef.current.musicVolume * 2,
@@ -132,6 +138,7 @@ export function AudioPlaylist({
     <audio
       ref={audioRef}
       src={source}
+      crossOrigin="anonymous"
       autoPlay
       muted={muted}
       preload="auto"
@@ -139,7 +146,18 @@ export function AudioPlaylist({
         if (status !== "playing") void attemptPlay();
       }}
       onPlay={() => reportStatus("playing")}
-      onError={() => reportStatus("error", "A faixa nao pode ser carregada pelo Player.")}
+      onError={() => {
+        const audio = audioRef.current;
+        if (audio && !nativeFallbackRef.current) {
+          nativeFallbackRef.current = true;
+          disableMediaElementAudioGraph(audio);
+          audio.removeAttribute("crossorigin");
+          audio.load();
+          void attemptPlay();
+          return;
+        }
+        reportStatus("error", "A faixa nao pode ser carregada pelo Player.");
+      }}
       onEnded={() => {
         if (orderedTracks.length === 1) {
           const audio = audioRef.current;

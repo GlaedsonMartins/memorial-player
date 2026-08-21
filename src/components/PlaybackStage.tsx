@@ -41,6 +41,8 @@ export function PlaybackStage({
   const activePlaybackTokenRef = useRef("");
   const current = queue[index % Math.max(queue.length, 1)] ?? heldItem;
   const next = useMemo(() => queue[(index + 1) % Math.max(queue.length, 1)], [index, queue]);
+  const mediaToken = current ? `${current.id}:${current.cachedUrl}` : "";
+  const currentIsImage = isImagePlaybackItem(current);
   const playbackToken = current ? `${index}:${current.id}:${current.cachedUrl}` : "";
 
   const advance = useCallback((token: string) => {
@@ -89,7 +91,7 @@ export function PlaybackStage({
 
   const startVideoIfReady = useCallback(() => {
     const video = videoRef.current;
-    if (!video || isImagePlaybackItem(current) || videoStartedRef.current) return;
+    if (!video || currentIsImage || videoStartedRef.current) return;
     if (video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return;
 
     const readySince = videoReadySinceRef.current ?? Date.now();
@@ -109,7 +111,7 @@ export function PlaybackStage({
         videoStartedRef.current = false;
         if (import.meta.env.DEV) console.debug("[PlaybackStage] video play deferred", error);
       });
-  }, [current]);
+  }, [currentIsImage]);
 
   const handleVideoEnded = useCallback(() => {
     if (queue.length !== 1) {
@@ -133,7 +135,7 @@ export function PlaybackStage({
     videoStartedRef.current = false;
     videoReadySinceRef.current = null;
     const video = videoRef.current;
-    if (!video || isImagePlaybackItem(current)) return;
+    if (!video || currentIsImage) return;
 
     video.load();
     videoPollRef.current = window.setInterval(startVideoIfReady, 150);
@@ -143,20 +145,20 @@ export function PlaybackStage({
         videoPollRef.current = null;
       }
     };
-  }, [current, startVideoIfReady]);
+  }, [currentIsImage, mediaToken, startVideoIfReady]);
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || isImagePlaybackItem(current)) return;
+    if (!video || currentIsImage) return;
     connectMediaElement(video);
     return () => disconnectMediaElement(video);
-  }, [current]);
+  }, [currentIsImage, mediaToken]);
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || isImagePlaybackItem(current)) return;
+    if (!video || currentIsImage) return;
     setMediaElementGain(video, audioSettings.masterVolume * audioSettings.videoVolume);
-  }, [audioSettings, current]);
+  }, [audioSettings, currentIsImage, mediaToken]);
 
   if (!current) return null;
 
@@ -176,7 +178,7 @@ export function PlaybackStage({
       )}
       {isImagePlaybackItem(current) ? (
         <img
-          key={current.id}
+          key={mediaToken}
           src={current.cachedUrl}
           alt=""
           className="player-fade-enter h-full w-full object-contain"
@@ -187,7 +189,7 @@ export function PlaybackStage({
         />
       ) : (
         <video
-          key={current.id}
+          key={mediaToken}
           src={current.cachedUrl}
           className="h-full w-full object-contain"
           muted={current.videoMuted !== false}
