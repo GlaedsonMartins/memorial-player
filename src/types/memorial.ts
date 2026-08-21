@@ -8,6 +8,28 @@ export type SlideDuration = (typeof ALLOWED_SLIDE_DURATIONS)[number];
 export type ActiveSessionStatus = "WAITING" | "PLAYING" | "ENDING" | "ENDED";
 export type TributeStatus = "CREATED" | "ACTIVE" | "ENDED" | "DELETED";
 export type MediaType = "image" | "video";
+
+export interface AudioSettings {
+  masterVolume: number;
+  musicVolume: number;
+  videoVolume: number;
+}
+
+export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
+  masterVolume: 1,
+  musicVolume: 0.5,
+  videoVolume: 1,
+};
+
+export function normalizeAudioSettings(settings?: Partial<AudioSettings> | null): AudioSettings {
+  const clamp = (value: number | undefined, fallback: number) =>
+    Math.max(0, Math.min(1, Number.isFinite(value) ? value! : fallback));
+  return {
+    masterVolume: clamp(settings?.masterVolume, DEFAULT_AUDIO_SETTINGS.masterVolume),
+    musicVolume: clamp(settings?.musicVolume, DEFAULT_AUDIO_SETTINGS.musicVolume),
+    videoVolume: clamp(settings?.videoVolume, DEFAULT_AUDIO_SETTINGS.videoVolume),
+  };
+}
 export type PlayerState =
   | "INITIALIZING"
   | "CONNECTING"
@@ -116,6 +138,7 @@ export interface Tribute {
   playlistId: string;
   slideDuration: SlideDuration;
   notes: string;
+  audioSettings?: AudioSettings;
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
   startedAt: Timestamp | null;

@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PlaylistTrack } from "../types/memorial";
+import type { AudioSettings, PlaylistTrack } from "../types/memorial";
+import {
+  connectMediaElement,
+  disconnectMediaElement,
+  resumeMediaAudio,
+  setMediaElementGain,
+} from "../services/mediaAudioService";
 
 export type AudioPlaybackStatus = "empty" | "loading" | "playing" | "paused" | "blocked" | "error";
 
@@ -9,11 +15,13 @@ export function AudioPlaylist({
   tracks,
   cachedTracks,
   muted,
+  audioSettings,
   onStatus,
 }: {
   tracks: PlaylistTrack[];
   cachedTracks: Map<string, string>;
   muted: boolean;
+  audioSettings: AudioSettings;
   onStatus?: AudioStatusHandler;
 }) {
   const orderedTracks = useMemo(() => tracks.slice().sort((a, b) => a.order - b.order), [tracks]);
@@ -31,10 +39,12 @@ export function AudioPlaylist({
       (currentTrack.url || currentTrack.storagePath)
     : "";
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioSettingsRef = useRef(audioSettings);
   const onStatusRef = useRef(onStatus);
   const sourceRef = useRef(source);
   onStatusRef.current = onStatus;
   sourceRef.current = source;
+  audioSettingsRef.current = audioSettings;
 
   function reportStatus(nextStatus: AudioPlaybackStatus, message?: string) {
     setStatus(nextStatus);
@@ -45,6 +55,7 @@ export function AudioPlaylist({
     const audio = audioRef.current;
     if (!audio || !sourceRef.current) return;
     try {
+      await resumeMediaAudio(audio);
       await audio.play();
       reportStatus("playing");
     } catch (error) {
@@ -55,6 +66,21 @@ export function AudioPlaylist({
         reportStatus("error", mediaError);
       }
     }
+  }, []);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    connectMediaElement(audio);
+    setMediaElementGain(audio, audioSettings.masterVolume * audioSettings.musicVolume * 2);
+  }, [audioSettings]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    return () => {
+      disconnectMediaElement(audio);
+    };
   }, []);
 
   useEffect(() => {
@@ -71,6 +97,10 @@ export function AudioPlaylist({
     const audio = audioRef.current;
     if (!audio || !source) return;
 
+    setMediaElementGain(
+      audio,
+      audioSettingsRef.current.masterVolume * audioSettingsRef.current.musicVolume * 2,
+    );
     audio.load();
     reportStatus("loading");
     void attemptPlay();

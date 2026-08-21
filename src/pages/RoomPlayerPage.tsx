@@ -7,7 +7,7 @@ import { useKioskHardening } from "../hooks/useKioskHardening";
 import { useDeviceSession } from "../hooks/useDeviceSession";
 import { usePlayerSnapshot } from "../hooks/usePlayerSnapshot";
 import { isPlayable } from "../services/playerService";
-import type { PlaybackItem } from "../types/memorial";
+import { normalizeAudioSettings, type PlaybackItem } from "../types/memorial";
 
 export function RoomPlayerPage({ routeRoomId }: { routeRoomId: string | null }) {
   useKioskHardening();
@@ -27,6 +27,10 @@ export function RoomPlayerPage({ routeRoomId }: { routeRoomId: string | null }) 
 
   const roomName = player.snapshot.room?.name ?? configuredRoomId;
   const slideDuration = player.snapshot.tribute?.slideDuration ?? player.snapshot.session?.slideDuration ?? 5;
+  const audioSettings = useMemo(
+    () => normalizeAudioSettings(player.snapshot.tribute?.audioSettings),
+    [player.snapshot.tribute?.audioSettings],
+  );
   const playing = isPlayable(player.snapshot) && player.queue.length > 0;
   const tracks = useMemo(() => player.snapshot.playlist?.tracks ?? [], [player.snapshot.playlist?.tracks]);
   const mutePlaylist = activeMedia?.type === "video" && activeMedia.videoMuted === false;
@@ -54,12 +58,14 @@ export function RoomPlayerPage({ routeRoomId }: { routeRoomId: string | null }) 
           <PlaybackStage
             queue={player.queue}
             slideDuration={slideDuration}
+            audioSettings={audioSettings}
             onCurrentItemChange={setActiveMedia}
           />
           <AudioPlaylist
             tracks={tracks}
             cachedTracks={player.cachedTracks}
             muted={mutePlaylist}
+            audioSettings={audioSettings}
             onStatus={(status, message) => setAudioStatus({ status, message })}
           />
           {audioStatus.status === "blocked" && (

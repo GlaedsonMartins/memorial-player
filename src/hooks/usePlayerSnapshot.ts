@@ -113,6 +113,7 @@ export function usePlayerSnapshot(roomId: string, deviceId: string, authenticate
   useEffect(() => {
     if (!tribute || session?.status !== "PLAYING") {
       setQueue([]);
+      revokeCachedObjectUrls();
       return;
     }
 
@@ -143,9 +144,12 @@ export function usePlayerSnapshot(roomId: string, deviceId: string, authenticate
 
     return () => {
       cancelled = true;
-      revokeCachedObjectUrls();
     };
   }, [playlist?.tracks, session?.status, tribute]);
+
+  useEffect(() => {
+    return () => revokeCachedObjectUrls();
+  }, [roomId]);
 
   useEffect(() => {
     saveSnapshot(roomId, snapshot);
