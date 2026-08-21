@@ -66,9 +66,17 @@ export async function cacheMedia(items: CacheableMedia[]) {
 
   if (!allSameOrigin) {
     const resolved = new Map<string, string>();
+    const targetUrls = new Map<string, string>();
+    const uniqueResolvedUrls = [...new Set(resolvedItems.map(({ resolvedUrl }) => resolvedUrl).filter(Boolean))];
+
+    await runWithConcurrency(uniqueResolvedUrls, 2, async (resolvedUrl) => {
+      targetUrls.set(resolvedUrl, await materializedObjectUrl(resolvedUrl));
+    });
+
     resolvedItems.forEach(({ item, resolvedUrl }) => {
-      if (item.url) resolved.set(item.url, resolvedUrl);
-      if (item.storagePath) resolved.set(item.storagePath, resolvedUrl);
+      const targetUrl = targetUrls.get(resolvedUrl) ?? resolvedUrl;
+      if (item.url) resolved.set(item.url, targetUrl);
+      if (item.storagePath) resolved.set(item.storagePath, targetUrl);
     });
     return resolved;
   }
@@ -112,6 +120,22 @@ export async function cacheMedia(items: CacheableMedia[]) {
       if (item.storagePath) resolved.set(item.storagePath, resolvedUrl);
     });
     return resolved;
+  }
+}
+
+async function materializedObjectUrl(url: string) {
+  const existingObjectUrl = objectUrlBySource.get(url);
+  if (existingObjectUrl) return existingObjectUrl;
+
+  try {
+    const response = await fetch(url, { mode: "cors", credentials: "omit" });
+    if (!response.ok) return url;
+    const objectUrl = URL.createObjectURL(await response.blob());
+    objectUrls.add(objectUrl);
+    objectUrlBySource.set(url, objectUrl);
+    return objectUrl;
+  } catch {
+    return url;
   }
 }
 
