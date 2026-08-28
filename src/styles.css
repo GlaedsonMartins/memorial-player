@@ -49,9 +49,9 @@ input {
 .player-backdrop {
   z-index: 1;
   object-fit: cover;
-  transform: scale(1.12);
-  filter: blur(28px);
-  opacity: 0.62;
+  transform: scale(1.08);
+  filter: blur(22px);
+  opacity: 0.58;
   will-change: opacity, transform, filter;
 }
 
@@ -120,28 +120,28 @@ input {
 }
 
 @keyframes player-zoom-in {
-  from { transform: scale(1.02); }
-  to { transform: scale(1.1); }
+  from { transform: scale(1.01); }
+  to { transform: scale(1.06); }
 }
 
 @keyframes player-zoom-out {
-  from { transform: scale(1.1); }
-  to { transform: scale(1.02); }
+  from { transform: scale(1.06); }
+  to { transform: scale(1.01); }
 }
 
 @keyframes player-pan-horizontal {
-  from { transform: scale(1.06) translateX(-1.5%); }
-  to { transform: scale(1.06) translateX(1.5%); }
+  from { transform: scale(1.04) translateX(-1%); }
+  to { transform: scale(1.04) translateX(1%); }
 }
 
 @keyframes player-pan-vertical {
-  from { transform: scale(1.06) translateY(-1.5%); }
-  to { transform: scale(1.06) translateY(1.5%); }
+  from { transform: scale(1.04) translateY(-1%); }
+  to { transform: scale(1.04) translateY(1%); }
 }
 
 @keyframes player-focus {
-  from { transform: scale(1.04); filter: blur(1.5px); }
-  to { transform: scale(1.07); filter: blur(0); }
+  from { transform: scale(1.03); filter: blur(0.8px); }
+  to { transform: scale(1.05); filter: blur(0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
