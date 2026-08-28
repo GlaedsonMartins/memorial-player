@@ -31,15 +31,126 @@ input {
   font: inherit;
 }
 
-.player-fade-enter {
-  animation: player-fade 900ms ease both;
+.player-media,
+.player-backdrop {
+  position: absolute;
+  inset: 0;
+  display: block;
+  height: 100%;
+  width: 100%;
 }
 
-@keyframes player-fade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
+.player-media {
+  z-index: 2;
+  object-fit: contain;
+  will-change: opacity, transform, filter;
+}
+
+.player-backdrop {
+  z-index: 1;
+  object-fit: cover;
+  transform: scale(1.12);
+  filter: blur(28px);
+  opacity: 0.62;
+  will-change: opacity, transform, filter;
+}
+
+.player-layer-current {
+  opacity: 1;
+}
+
+.player-layer-enter {
+  animation: player-crossfade 900ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.player-media-zoom-in {
+  animation-name: player-zoom-in;
+  animation-duration: var(--player-media-duration, 8s);
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+}
+
+.player-media-zoom-out {
+  animation-name: player-zoom-out;
+  animation-duration: var(--player-media-duration, 8s);
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+}
+
+.player-media-pan-horizontal {
+  animation-name: player-pan-horizontal;
+  animation-duration: var(--player-media-duration, 8s);
+  animation-timing-function: ease-in-out;
+  animation-fill-mode: both;
+}
+
+.player-media-pan-vertical {
+  animation-name: player-pan-vertical;
+  animation-duration: var(--player-media-duration, 8s);
+  animation-timing-function: ease-in-out;
+  animation-fill-mode: both;
+}
+
+.player-media-focus {
+  animation-name: player-focus;
+  animation-duration: var(--player-media-duration, 8s);
+  animation-timing-function: ease-in-out;
+  animation-fill-mode: both;
+}
+
+.player-layer-enter.player-media {
+  animation-duration: 900ms, var(--player-media-duration, 8s);
+  animation-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1), ease-out;
+  animation-fill-mode: both;
+}
+
+.player-layer-enter.player-media-zoom-in { animation-name: player-crossfade, player-zoom-in; }
+.player-layer-enter.player-media-zoom-out { animation-name: player-crossfade, player-zoom-out; }
+.player-layer-enter.player-media-pan-horizontal { animation-name: player-crossfade, player-pan-horizontal; }
+.player-layer-enter.player-media-pan-vertical { animation-name: player-crossfade, player-pan-vertical; }
+.player-layer-enter.player-media-focus { animation-name: player-crossfade, player-focus; }
+
+.player-layer-enter.player-backdrop {
+  animation: player-crossfade 900ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@keyframes player-crossfade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes player-zoom-in {
+  from { transform: scale(1.02); }
+  to { transform: scale(1.1); }
+}
+
+@keyframes player-zoom-out {
+  from { transform: scale(1.1); }
+  to { transform: scale(1.02); }
+}
+
+@keyframes player-pan-horizontal {
+  from { transform: scale(1.06) translateX(-1.5%); }
+  to { transform: scale(1.06) translateX(1.5%); }
+}
+
+@keyframes player-pan-vertical {
+  from { transform: scale(1.06) translateY(-1.5%); }
+  to { transform: scale(1.06) translateY(1.5%); }
+}
+
+@keyframes player-focus {
+  from { transform: scale(1.04); filter: blur(1.5px); }
+  to { transform: scale(1.07); filter: blur(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-media,
+  .player-backdrop,
+  .player-layer-enter {
+    animation-name: player-crossfade;
+    animation-duration: 900ms;
+    transform: none;
+    filter: none;
   }
 }
