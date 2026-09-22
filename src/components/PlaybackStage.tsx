@@ -61,11 +61,13 @@ export function PlaybackStage({
   const next = useMemo(() => queue[(index + 1) % Math.max(queue.length, 1)], [index, queue]);
   const mediaToken = current ? `${current.id}:${current.cachedUrl}` : "";
   const currentIsImage = isImagePlaybackItem(current);
+  const isSingleImage = queue.length === 1 && isImagePlaybackItem(queue[0]);
   const playbackToken = current ? `${index}:${current.id}:${current.cachedUrl}` : "";
 
   const advance = useCallback((token: string) => {
     if (
       queue.length === 0 ||
+      isSingleImage ||
       activePlaybackTokenRef.current !== token ||
       advanceLockRef.current === token
     ) return;
@@ -74,12 +76,23 @@ export function PlaybackStage({
     if (!nextItem) return;
     setTransitionItem(nextItem);
     transitionTimerRef.current = window.setTimeout(() => {
+      transitionTimerRef.current = null;
       setTransitionItem(null);
       setHeldItem(null);
       setIndex((value) => (value + 1) % queue.length);
       advanceLockRef.current = null;
     }, TRANSITION_MS);
-  }, [index, queue]);
+  }, [index, isSingleImage, queue]);
+
+  useEffect(() => {
+    if (!isSingleImage) return;
+    if (transitionTimerRef.current !== null) {
+      window.clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = null;
+    }
+    advanceLockRef.current = null;
+    setTransitionItem(null);
+  }, [isSingleImage]);
 
   useEffect(() => {
     activePlaybackTokenRef.current = playbackToken;
@@ -111,12 +124,12 @@ export function PlaybackStage({
   }, []);
 
   useEffect(() => {
-    if (!isImagePlaybackItem(current) || transitionItem) return;
+    if (isSingleImage || !isImagePlaybackItem(current) || transitionItem) return;
     const timeout = window.setTimeout(() => {
       advance(playbackToken);
     }, slideDuration * 1000);
     return () => window.clearTimeout(timeout);
-  }, [advance, current, playbackToken, slideDuration, transitionItem]);
+  }, [advance, current, isSingleImage, playbackToken, slideDuration, transitionItem]);
 
   const startVideoIfReady = useCallback(() => {
     const video = videoRef.current;
@@ -216,8 +229,10 @@ export function PlaybackStage({
   function renderMedia(item: PlaybackItem, layer: "current" | "transition") {
     const isTransition = layer === "transition";
     const itemEffect = isTransition ? transitionEffect : effect;
-    const foregroundClass = `player-media player-media-${itemEffect} ${isTransition ? "player-layer-enter" : "player-layer-current"}`;
-    const backgroundClass = `player-backdrop ${isTransition ? "player-layer-enter" : "player-layer-current"}`;
+    const foregroundClass = isSingleImage
+      ? "player-media player-layer-current player-static"
+      : `player-media player-media-${itemEffect} ${isTransition ? "player-layer-enter" : "player-layer-current"}`;
+    const backgroundClass = `player-backdrop ${isTransition ? "player-layer-enter" : "player-layer-current"}${isSingleImage ? " player-static" : ""}`;
 
     return (
       <div className="absolute inset-0 overflow-hidden" aria-hidden={isTransition}>
@@ -268,7 +283,7 @@ export function PlaybackStage({
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-black">
-      {isImagePlaybackItem(next) && <img src={next.cachedUrl} alt="" className="hidden" draggable={false} />}
+      {!isSingleImage && isImagePlaybackItem(next) && <img src={next.cachedUrl} alt="" className="hidden" draggable={false} />}
       {!isImagePlaybackItem(next) && next?.cachedUrl !== current.cachedUrl && (
         <video
           key={`preload-${next.id}`}
@@ -281,7 +296,7 @@ export function PlaybackStage({
         />
       )}
       {renderMedia(current, "current")}
-      {transitionItem && renderMedia(transitionItem, "transition")}
+      {!isSingleImage && transitionItem && renderMedia(transitionItem, "transition")}
     </main>
   );
 }

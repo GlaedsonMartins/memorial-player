@@ -154,3 +154,16 @@ input {
     filter: none;
   }
 }
+
+/* Keep a single photo still, including when reduced motion is enabled. */
+.player-media.player-static,
+.player-backdrop.player-static {
+  animation: none;
+  transition: none;
+  will-change: auto;
+}
+
+.player-media.player-static {
+  transform: none;
+  filter: none;
+}
