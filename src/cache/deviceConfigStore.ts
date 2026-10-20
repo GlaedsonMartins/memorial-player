@@ -53,35 +53,69 @@ async function clearIndexedDbConfig() {
   });
 }
 
+function isValidDeviceConfig(value: unknown): value is DeviceConfig {
+  if (!value || typeof value !== "object") return false;
+  const config = value as Partial<DeviceConfig>;
+  return (
+    config.setupCompleted === true &&
+    typeof config.deviceId === "string" &&
+    config.deviceId.trim().length > 0 &&
+    typeof config.deviceToken === "string" &&
+    config.deviceToken.trim().length > 0 &&
+    typeof config.roomId === "string" &&
+    config.roomId.trim().length > 0
+  );
+}
+
 export async function loadDeviceConfig() {
   try {
     const config = await readIndexedDbConfig();
-    if (config?.setupCompleted) return config;
+    if (isValidDeviceConfig(config)) return config;
   } catch {
     // Fall back to LocalStorage on restricted kiosk browsers.
   }
 
-  const raw = localStorage.getItem(DEVICE_CONFIG_KEY);
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(DEVICE_CONFIG_KEY);
+  } catch {
+    return null;
+  }
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as DeviceConfig;
+    const config: unknown = JSON.parse(raw);
+    return isValidDeviceConfig(config) ? config : null;
   } catch {
-    localStorage.removeItem(DEVICE_CONFIG_KEY);
+    try {
+      localStorage.removeItem(DEVICE_CONFIG_KEY);
+    } catch {
+      // Storage is unavailable; IndexedDB remains the durable fallback.
+    }
     return null;
   }
 }
 
 export async function saveDeviceConfig(config: DeviceConfig) {
-  localStorage.setItem(DEVICE_CONFIG_KEY, JSON.stringify(config));
+  // Keep both stores independent: kiosk/private browser policies can disable
+  // one storage API while leaving the other available.
+  try {
+    localStorage.setItem(DEVICE_CONFIG_KEY, JSON.stringify(config));
+  } catch {
+    // IndexedDB below is the fallback when LocalStorage is unavailable.
+  }
   try {
     await writeIndexedDbConfig(config);
   } catch {
-    // LocalStorage already holds a copy.
+    // LocalStorage may still hold a durable copy.
   }
 }
 
 export async function clearDeviceConfig() {
-  localStorage.removeItem(DEVICE_CONFIG_KEY);
+  try {
+    localStorage.removeItem(DEVICE_CONFIG_KEY);
+  } catch {
+    // Continue clearing IndexedDB.
+  }
   try {
     await clearIndexedDbConfig();
   } catch {

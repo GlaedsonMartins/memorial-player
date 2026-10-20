@@ -20,23 +20,31 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  // Let Storage/Firestore requests preserve their own errors and CORS semantics.
+  if (new URL(event.request.url).origin !== self.location.origin) return;
 
   if (event.request.destination === "image" || event.request.destination === "video" || event.request.destination === "audio") {
+    if (event.request.headers.has("range")) return;
     event.respondWith(
-      caches.open("memorial-player-media-v1").then(async (cache) => {
-        const cached = await cache.match(event.request);
+      (async () => {
+        const cache = await caches.open("memorial-player-media-v1").catch(() => null);
+        const cached = await cache?.match(event.request).catch(() => undefined);
         if (cached) return cached;
         const response = await fetch(event.request);
-        if (response.ok) await cache.put(event.request, response.clone());
+        if (response.status === 200) await cache?.put(event.request, response.clone()).catch(() => undefined);
         return response;
-      }),
+      })(),
     );
     return;
   }
 
   event.respondWith(
     fetch(event.request).catch(() =>
-      caches.match(event.request).then((response) => response || caches.match("/")),
+      caches.match(event.request).then(async (response) => {
+        if (response) return response;
+        if (event.request.mode === "navigate") return (await caches.match("/")) || Response.error();
+        return Response.error();
+      }),
     ),
   );
 });

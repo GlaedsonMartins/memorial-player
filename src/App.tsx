@@ -1,6 +1,7 @@
 import { SetupPage } from "./pages/SetupPage";
 import { ResetSetupPage } from "./pages/ResetSetupPage";
 import { RoomPlayerPage } from "./pages/RoomPlayerPage";
+import { useAutoHideCursor } from "./hooks/useAutoHideCursor";
 
 function legacyRoomId(number: string) {
   return `room-${number.padStart(2, "0")}`;
@@ -16,6 +17,7 @@ function parseRoomId(pathname: string) {
 }
 
 export function App() {
+  useAutoHideCursor();
   const pathname = window.location.pathname;
   if (pathname === "/setup/reset") return <ResetSetupPage />;
   if (pathname === "/setup") return <SetupPage />;

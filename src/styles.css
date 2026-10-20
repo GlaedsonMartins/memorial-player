@@ -23,7 +23,11 @@ body,
 
 body {
   user-select: none;
-  cursor: none;
+}
+
+body.cursor-idle,
+body.cursor-idle * {
+  cursor: none !important;
 }
 
 button,
@@ -55,12 +59,18 @@ input {
   will-change: opacity, transform, filter;
 }
 
-.player-layer-current {
-  opacity: 1;
+.player-slide {
+  isolation: isolate;
+  background: #000;
 }
 
-.player-layer-enter {
-  animation: player-crossfade 900ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+.player-slide-preparing {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.player-slide-enter {
+  animation: player-slide-in var(--player-transition-duration, 900ms) ease-in-out both;
 }
 
 .player-media-zoom-in {
@@ -98,25 +108,10 @@ input {
   animation-fill-mode: both;
 }
 
-.player-layer-enter.player-media {
-  animation-duration: 900ms, var(--player-media-duration, 8s);
-  animation-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1), ease-out;
-  animation-fill-mode: both;
-}
-
-.player-layer-enter.player-media-zoom-in { animation-name: player-crossfade, player-zoom-in; }
-.player-layer-enter.player-media-zoom-out { animation-name: player-crossfade, player-zoom-out; }
-.player-layer-enter.player-media-pan-horizontal { animation-name: player-crossfade, player-pan-horizontal; }
-.player-layer-enter.player-media-pan-vertical { animation-name: player-crossfade, player-pan-vertical; }
-.player-layer-enter.player-media-focus { animation-name: player-crossfade, player-focus; }
-
-.player-layer-enter.player-backdrop {
-  animation: player-crossfade 900ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
-}
-
-@keyframes player-crossfade {
-  from { opacity: 0; }
-  to { opacity: 1; }
+/* The outgoing slide stays opaque beneath the incoming complete slide. */
+@keyframes player-slide-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
 }
 
 @keyframes player-zoom-in {
@@ -146,10 +141,8 @@ input {
 
 @media (prefers-reduced-motion: reduce) {
   .player-media,
-  .player-backdrop,
-  .player-layer-enter {
-    animation-name: player-crossfade;
-    animation-duration: 900ms;
+  .player-backdrop {
+    animation: none;
     transform: none;
     filter: none;
   }

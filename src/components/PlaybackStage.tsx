@@ -49,6 +49,11 @@ export function PlaybackStage({
   const [index, setIndex] = useState(0);
   const [heldItem, setHeldItem] = useState<PlaybackItem | null>(null);
   const [transitionItem, setTransitionItem] = useState<PlaybackItem | null>(null);
+  const [transitionIndex, setTransitionIndex] = useState(0);
+  const [transitionReady, setTransitionReady] = useState(false);
+  const readyPartsRef = useRef(new Set<string>());
+  const failedItemsRef = useRef(new Set<string>());
+  const preparationRef = useRef(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const transitionVideoRef = useRef<HTMLVideoElement | null>(null);
   const videoStartedRef = useRef(false);
@@ -64,9 +69,17 @@ export function PlaybackStage({
   const isSingleImage = queue.length === 1 && isImagePlaybackItem(queue[0]);
   const playbackToken = current ? `${index}:${current.id}:${current.cachedUrl}` : "";
 
+  const prepareTransition = useCallback((item: PlaybackItem, itemIndex: number) => {
+    preparationRef.current += 1;
+    readyPartsRef.current.clear();
+    setTransitionReady(false);
+    setTransitionIndex(itemIndex);
+    setTransitionItem(item);
+  }, []);
+
   const advance = useCallback((token: string) => {
     if (
-      queue.length === 0 ||
+      queue.length < 2 ||
       isSingleImage ||
       activePlaybackTokenRef.current !== token ||
       advanceLockRef.current === token
@@ -74,15 +87,57 @@ export function PlaybackStage({
     advanceLockRef.current = token;
     const nextItem = queue[(index + 1) % queue.length];
     if (!nextItem) return;
-    setTransitionItem(nextItem);
+    failedItemsRef.current.clear();
+    prepareTransition(nextItem, (index + 1) % queue.length);
+  }, [index, isSingleImage, prepareTransition, queue]);
+
+  const skipFailedTransition = useCallback(() => {
+    if (!transitionItem) return;
+    failedItemsRef.current.add(`${transitionItem.id}:${transitionItem.cachedUrl}`);
+    for (let offset = 1; offset < queue.length; offset += 1) {
+      const candidateIndex = (transitionIndex + offset) % queue.length;
+      const candidate = queue[candidateIndex];
+      if (candidateIndex === index || failedItemsRef.current.has(`${candidate.id}:${candidate.cachedUrl}`)) continue;
+      prepareTransition(candidate, candidateIndex);
+      return;
+    }
+    // Keep the last displayed slide when every alternative fails.
+    setTransitionReady(false);
+    setTransitionItem(null);
+    advanceLockRef.current = null;
+  }, [index, prepareTransition, queue, transitionIndex, transitionItem]);
+
+  useEffect(() => {
+    if (!transitionItem || isSingleImage) return;
+    if (!transitionReady) {
+      const timeout = window.setTimeout(skipFailedTransition, 15000);
+      return () => window.clearTimeout(timeout);
+    }
     transitionTimerRef.current = window.setTimeout(() => {
       transitionTimerRef.current = null;
       setTransitionItem(null);
+      setTransitionReady(false);
       setHeldItem(null);
-      setIndex((value) => (value + 1) % queue.length);
+      setIndex(transitionIndex);
       advanceLockRef.current = null;
     }, TRANSITION_MS);
-  }, [index, isSingleImage, queue]);
+    return () => {
+      if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = null;
+    };
+  }, [isSingleImage, skipFailedTransition, transitionIndex, transitionItem, transitionReady]);
+
+  useEffect(() => {
+    if (!transitionItem) return;
+    const newIndex = queue.findIndex((item) => item.id === transitionItem.id && item.cachedUrl === transitionItem.cachedUrl);
+    if (newIndex >= 0) {
+      setTransitionIndex(newIndex);
+    } else {
+      setTransitionItem(null);
+      setTransitionReady(false);
+      advanceLockRef.current = null;
+    }
+  }, [queue, transitionItem]);
 
   useEffect(() => {
     if (!isSingleImage) return;
@@ -92,6 +147,7 @@ export function PlaybackStage({
     }
     advanceLockRef.current = null;
     setTransitionItem(null);
+    setTransitionReady(false);
   }, [isSingleImage]);
 
   useEffect(() => {
@@ -133,7 +189,7 @@ export function PlaybackStage({
 
   const startVideoIfReady = useCallback(() => {
     const video = videoRef.current;
-    if (!video || currentIsImage || transitionItem || videoStartedRef.current) return;
+    if (!video || currentIsImage || videoStartedRef.current) return;
     if (video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return;
 
     const readySince = videoReadySinceRef.current ?? Date.now();
@@ -153,9 +209,10 @@ export function PlaybackStage({
         videoStartedRef.current = false;
         if (import.meta.env.DEV) console.debug("[PlaybackStage] video play deferred", error);
       });
-  }, [currentIsImage, transitionItem]);
+  }, [currentIsImage]);
 
   const handleVideoEnded = useCallback(() => {
+    if (transitionItem) return;
     if (queue.length !== 1) {
       advance(playbackToken);
       return;
@@ -171,13 +228,15 @@ export function PlaybackStage({
       .catch((error: unknown) => {
         if (import.meta.env.DEV) console.debug("[PlaybackStage] single video replay deferred", error);
       });
-  }, [advance, playbackToken, queue.length]);
+  }, [advance, playbackToken, queue.length, transitionItem]);
 
   const startTransitionVideoIfReady = useCallback(() => {
     const video = transitionVideoRef.current;
     if (!video || !transitionItem || transitionItem.type !== "video") return;
     if (video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return;
     video.muted = true;
+    readyPartsRef.current.add("foreground");
+    if (readyPartsRef.current.has("background")) setTransitionReady(true);
     void video.play().catch((error: unknown) => {
       if (import.meta.env.DEV) console.debug("[PlaybackStage] transition video deferred", error);
     });
@@ -187,9 +246,10 @@ export function PlaybackStage({
     videoStartedRef.current = false;
     videoReadySinceRef.current = null;
     const video = videoRef.current;
-    if (!video || currentIsImage || transitionItem) return;
+    if (!video || currentIsImage) return;
 
-    video.load();
+    // The incoming DOM node is promoted intact: never reload or rewind it here.
+    startVideoIfReady();
     videoPollRef.current = window.setInterval(startVideoIfReady, 150);
     return () => {
       if (videoPollRef.current !== null) {
@@ -197,7 +257,7 @@ export function PlaybackStage({
         videoPollRef.current = null;
       }
     };
-  }, [currentIsImage, mediaToken, startVideoIfReady, transitionItem]);
+  }, [currentIsImage, mediaToken, startVideoIfReady]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -216,28 +276,54 @@ export function PlaybackStage({
     if (!transitionItem || transitionItem.type !== "video") return;
     const video = transitionVideoRef.current;
     if (!video) return;
-    video.load();
     startTransitionVideoIfReady();
   }, [startTransitionVideoIfReady, transitionItem]);
 
   if (!current) return null;
 
   const effect = getPresentationEffect(index);
-  const transitionEffect = getPresentationEffect(index + 1);
+  const transitionEffect = getPresentationEffect(transitionIndex);
   const durationStyle = { "--player-media-duration": `${slideDuration}s` } as CSSProperties;
 
   function renderMedia(item: PlaybackItem, layer: "current" | "transition") {
     const isTransition = layer === "transition";
     const itemEffect = isTransition ? transitionEffect : effect;
     const foregroundClass = isSingleImage
-      ? "player-media player-layer-current player-static"
-      : `player-media player-media-${itemEffect} ${isTransition ? "player-layer-enter" : "player-layer-current"}`;
-    const backgroundClass = `player-backdrop ${isTransition ? "player-layer-enter" : "player-layer-current"}${isSingleImage ? " player-static" : ""}`;
+      ? "player-media player-static"
+      : `player-media player-media-${itemEffect}`;
+    const backgroundClass = `player-backdrop${isSingleImage ? " player-static" : ""}`;
+    const slideClass = isSingleImage ? "" : isTransition
+      ? transitionReady ? "player-slide-enter" : "player-slide-preparing"
+      : "";
+    const mediaStyle = { ...durationStyle, animationPlayState: isTransition ? "paused" : "running" } as CSSProperties;
+
+    const markReady = (part: string) => {
+      if (!isTransition || transitionReady) return;
+      readyPartsRef.current.add(part);
+      if (readyPartsRef.current.has("foreground") && readyPartsRef.current.has("background")) setTransitionReady(true);
+    };
+    const imageLoaded = async (image: HTMLImageElement, part: string) => {
+      if (!isTransition) return;
+      const preparation = preparationRef.current;
+      try {
+        await image.decode();
+        if (image.isConnected && preparation === preparationRef.current) markReady(part);
+      } catch {
+        if (image.isConnected && preparation === preparationRef.current) skipFailedTransition();
+      }
+    };
 
     return (
-      <div className="absolute inset-0 overflow-hidden" aria-hidden={isTransition}>
+      <div
+        key={`${item.id}:${item.cachedUrl}`}
+        className={`player-slide absolute inset-0 overflow-hidden ${slideClass}`}
+        style={{ "--player-transition-duration": `${TRANSITION_MS}ms`, zIndex: isTransition ? 2 : 1 } as CSSProperties}
+        aria-hidden={isTransition}
+      >
         {item.type === "image" ? (
-          <img src={item.cachedUrl} alt="" className={backgroundClass} draggable={false} />
+          <img src={item.cachedUrl} alt="" className={backgroundClass} draggable={false}
+            onLoad={(event) => void imageLoaded(event.currentTarget, "background")}
+            onError={isTransition ? skipFailedTransition : undefined} />
         ) : (
           <video
             src={item.cachedUrl}
@@ -247,24 +333,25 @@ export function PlaybackStage({
             playsInline
             preload="auto"
             aria-hidden="true"
+            onLoadedData={() => markReady("background")}
+            onError={isTransition ? skipFailedTransition : undefined}
           />
         )}
         {item.type === "image" ? (
           <img
-            key={`${layer}-${item.id}-${item.cachedUrl}`}
             src={item.cachedUrl}
             alt=""
             className={foregroundClass}
-            style={durationStyle}
+            style={mediaStyle}
             draggable={false}
-            onError={() => !isTransition && advance(playbackToken)}
+            onLoad={(event) => void imageLoaded(event.currentTarget, "foreground")}
+            onError={() => isTransition ? skipFailedTransition() : advance(playbackToken)}
           />
         ) : (
           <video
-            key={`${layer}-${item.id}-${item.cachedUrl}`}
             src={item.cachedUrl}
             className={foregroundClass}
-            style={durationStyle}
+            style={mediaStyle}
             muted={isTransition || item.videoMuted !== false}
             playsInline
             preload="auto"
@@ -274,7 +361,7 @@ export function PlaybackStage({
             onCanPlayThrough={isTransition ? startTransitionVideoIfReady : startVideoIfReady}
             onProgress={isTransition ? startTransitionVideoIfReady : startVideoIfReady}
             onEnded={isTransition ? undefined : handleVideoEnded}
-            onError={() => !isTransition && advance(playbackToken)}
+            onError={() => isTransition ? skipFailedTransition() : advance(playbackToken)}
           />
         )}
       </div>
@@ -295,8 +382,10 @@ export function PlaybackStage({
           aria-hidden="true"
         />
       )}
-      {renderMedia(current, "current")}
-      {!isSingleImage && transitionItem && renderMedia(transitionItem, "transition")}
+      {[
+        renderMedia(current, "current"),
+        ...(!isSingleImage && transitionItem ? [renderMedia(transitionItem, "transition")] : []),
+      ]}
     </main>
   );
 }

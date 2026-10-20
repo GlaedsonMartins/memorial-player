@@ -23,14 +23,31 @@ async function runWithConcurrency<T>(items: T[], concurrency: number, task: (ite
   );
 }
 
-async function cachedObjectUrl(cache: Cache, url: string) {
+function isMediaResponse(response: Response) {
+  const contentType = response.headers.get("content-type") ?? "";
+  return response.status === 200 && !/text\/html|application\/(?:json|xml)|text\/xml/i.test(contentType);
+}
+
+async function materializedObjectUrl(url: string, cache: Cache | null) {
   const existingObjectUrl = objectUrlBySource.get(url);
   if (existingObjectUrl) return existingObjectUrl;
 
   try {
-    const response = await cache.match(url);
-    if (!response) return url;
-    const objectUrl = URL.createObjectURL(await response.blob());
+    let response = await cache?.match(url).catch(() => undefined);
+    if (response && !isMediaResponse(response)) {
+      await cache?.delete(url).catch(() => false);
+      response = undefined;
+    }
+    if (!response) {
+      // Bypass HTTP-cached redirects to temporary Storage download URLs.
+      response = await fetch(url, { mode: "cors", credentials: "omit", cache: "no-store" });
+      if (!isMediaResponse(response)) return url;
+      // Storage quota/private mode must not discard a successful download.
+      await cache?.put(url, response.clone()).catch(() => undefined);
+    }
+    const blob = await response.blob();
+    if (!blob.size) return url;
+    const objectUrl = URL.createObjectURL(blob);
     objectUrls.add(objectUrl);
     objectUrlBySource.set(url, objectUrl);
     return objectUrl;
@@ -47,96 +64,27 @@ export async function cacheMedia(items: CacheableMedia[]) {
     })),
   );
 
-  if (!("caches" in window)) {
-    const resolved = new Map<string, string>();
-    resolvedItems.forEach(({ item, resolvedUrl }) => {
-      if (item.url) resolved.set(item.url, resolvedUrl);
-      if (item.storagePath) resolved.set(item.storagePath, resolvedUrl);
-    });
-    return resolved;
+  let cache: Cache | null = null;
+  try {
+    if ("caches" in window) cache = await caches.open(CACHE_NAME);
+  } catch {
+    // Downloads remain usable even when persistent storage is unavailable.
   }
 
-  const allSameOrigin = resolvedItems.every(({ resolvedUrl }) => {
-    try {
-      return new URL(resolvedUrl).origin === window.location.origin;
-    } catch {
-      return false;
-    }
+  const resolved = new Map<string, string>();
+  const targetUrls = new Map<string, string>();
+  const uniqueResolvedUrls = [...new Set(resolvedItems.map(({ resolvedUrl }) => resolvedUrl).filter(Boolean))];
+
+  await runWithConcurrency(uniqueResolvedUrls, 2, async (resolvedUrl) => {
+    targetUrls.set(resolvedUrl, await materializedObjectUrl(resolvedUrl, cache));
   });
 
-  if (!allSameOrigin) {
-    const resolved = new Map<string, string>();
-    const targetUrls = new Map<string, string>();
-    const uniqueResolvedUrls = [...new Set(resolvedItems.map(({ resolvedUrl }) => resolvedUrl).filter(Boolean))];
-
-    await runWithConcurrency(uniqueResolvedUrls, 2, async (resolvedUrl) => {
-      targetUrls.set(resolvedUrl, await materializedObjectUrl(resolvedUrl));
-    });
-
-    resolvedItems.forEach(({ item, resolvedUrl }) => {
-      const targetUrl = targetUrls.get(resolvedUrl) ?? resolvedUrl;
-      if (item.url) resolved.set(item.url, targetUrl);
-      if (item.storagePath) resolved.set(item.storagePath, targetUrl);
-    });
-    return resolved;
-  }
-
-  try {
-    const cache = await caches.open(CACHE_NAME);
-    const resolved = new Map<string, string>();
-    const targetUrls = new Map<string, string>();
-    const uniqueResolvedUrls = [...new Set(resolvedItems.map(({ resolvedUrl }) => resolvedUrl).filter(Boolean))];
-
-    await runWithConcurrency(uniqueResolvedUrls, 2, async (resolvedUrl) => {
-      let targetUrl = resolvedUrl;
-      try {
-        const cached = await cache.match(resolvedUrl);
-        if (!cached) {
-          try {
-            await cache.add(resolvedUrl);
-          } catch {
-            // A failed media download should not stop playback; use remote URL as fallback.
-          }
-        }
-        targetUrl = await cachedObjectUrl(cache, resolvedUrl);
-      } catch {
-        targetUrl = resolvedUrl;
-      }
-      targetUrls.set(resolvedUrl, targetUrl);
-    });
-
-    resolvedItems.forEach(({ item, resolvedUrl }) => {
-      if (!resolvedUrl) return;
-      const targetUrl = targetUrls.get(resolvedUrl) ?? resolvedUrl;
-      if (item.url) resolved.set(item.url, targetUrl);
-      if (item.storagePath) resolved.set(item.storagePath, targetUrl);
-    });
-
-    return resolved;
-  } catch {
-    const resolved = new Map<string, string>();
-    resolvedItems.forEach(({ item, resolvedUrl }) => {
-      if (item.url) resolved.set(item.url, resolvedUrl);
-      if (item.storagePath) resolved.set(item.storagePath, resolvedUrl);
-    });
-    return resolved;
-  }
-}
-
-async function materializedObjectUrl(url: string) {
-  const existingObjectUrl = objectUrlBySource.get(url);
-  if (existingObjectUrl) return existingObjectUrl;
-
-  try {
-    const response = await fetch(url, { mode: "cors", credentials: "omit" });
-    if (!response.ok) return url;
-    const objectUrl = URL.createObjectURL(await response.blob());
-    objectUrls.add(objectUrl);
-    objectUrlBySource.set(url, objectUrl);
-    return objectUrl;
-  } catch {
-    return url;
-  }
+  resolvedItems.forEach(({ item, resolvedUrl }) => {
+    const targetUrl = targetUrls.get(resolvedUrl) ?? resolvedUrl;
+    if (item.url) resolved.set(item.url, targetUrl);
+    if (item.storagePath) resolved.set(item.storagePath, targetUrl);
+  });
+  return resolved;
 }
 
 export function revokeCachedObjectUrls() {
@@ -149,12 +97,16 @@ export async function clearOldMedia(keepUrls: string[]) {
   if (!("caches" in window)) return;
   const keep = new Set(keepUrls);
   objectUrlBySource.forEach((_objectUrl, sourceUrl) => keep.add(sourceUrl));
-  const cache = await caches.open(CACHE_NAME);
-  const requests = await cache.keys();
-  await Promise.all(
-    requests.map((request) => {
-      if (keep.has(request.url)) return Promise.resolve(false);
-      return cache.delete(request);
-    }),
-  );
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    const requests = await cache.keys();
+    await Promise.all(
+      requests.map((request) => {
+        if (keep.has(request.url)) return Promise.resolve(false);
+        return cache.delete(request);
+      }),
+    );
+  } catch {
+    // Best-effort cleanup: storage failures must not interrupt playback.
+  }
 }

@@ -117,8 +117,15 @@ export function usePlayerSnapshot(roomId: string, deviceId: string, authenticate
       return;
     }
 
-    const media = [...tribute.photos, ...tribute.videos];
-    const tracks = playlist?.tracks ?? [];
+    // Keep the player compatible with older/incomplete Firestore documents.
+    // The Cloud stores photos and videos in separate arrays, so missing arrays
+    // must not prevent the rest of the tribute from being rendered.
+    const photos = Array.isArray(tribute.photos) ? tribute.photos : [];
+    const videos = Array.isArray(tribute.videos) ? tribute.videos : [];
+    const media = [...photos, ...videos].filter(
+      (item) => typeof item?.url === "string" || typeof item?.storagePath === "string",
+    );
+    const tracks = Array.isArray(playlist?.tracks) ? playlist.tracks : [];
     let cancelled = false;
 
     void cacheMedia([...media, ...tracks]).then((cachedUrls) => {
@@ -131,7 +138,7 @@ export function usePlayerSnapshot(roomId: string, deviceId: string, authenticate
         if (track.storagePath) nextCachedTracks.set(track.storagePath, resolvedUrl);
       });
       setCachedTracks(nextCachedTracks);
-      const playbackQueue = buildPlaybackQueue(tribute.photos, tribute.videos, cachedUrls);
+      const playbackQueue = buildPlaybackQueue(photos, videos, cachedUrls);
       if (import.meta.env.DEV) {
         console.debug("[usePlayerSnapshot] playbackQueue", playbackQueue);
         console.debug("[usePlayerSnapshot] tribute.photos", tribute.photos);
