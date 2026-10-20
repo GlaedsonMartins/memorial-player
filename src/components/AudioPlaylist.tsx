@@ -35,11 +35,17 @@ export function AudioPlaylist({
     .map((track) => `${track.id}:${track.url}:${track.storagePath}`)
     .join("|");
   const currentTrack = orderedTracks[index % Math.max(orderedTracks.length, 1)];
-  const source = currentTrack
+  const candidateSource = currentTrack
     ? cachedTracks.get(currentTrack.url) ??
       cachedTracks.get(currentTrack.storagePath) ??
       (currentTrack.url || currentTrack.storagePath)
     : "";
+  const pinnedSource = useRef({ key: "", source: "" });
+  const sourceKey = `${index}:${currentTrack?.id}:${currentTrack?.url}:${currentTrack?.storagePath}`;
+  if (pinnedSource.current.key !== sourceKey) {
+    pinnedSource.current = { key: sourceKey, source: candidateSource };
+  }
+  const source = pinnedSource.current.source;
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioSettingsRef = useRef(audioSettings);
   const nativeFallbackRef = useRef(false);

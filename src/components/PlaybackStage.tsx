@@ -64,7 +64,14 @@ export function PlaybackStage({
   const advanceLockRef = useRef<string | null>(null);
   const transitionTimerRef = useRef<number | null>(null);
   const activePlaybackTokenRef = useRef("");
-  const current = queue[index % Math.max(queue.length, 1)] ?? heldItem;
+  const candidate = queue[index % Math.max(queue.length, 1)] ?? heldItem;
+  const pinnedItem = useRef<{ key: string; item: PlaybackItem | null } | null>(null);
+  const entryKey = `${index}:${candidate?.id}:${candidate?.url}:${candidate?.storagePath}`;
+  if (pinnedItem.current?.key !== entryKey) {
+    pinnedItem.current = { key: entryKey, item: candidate };
+  }
+  // Cache updates apply on the next entry, never to the mounted media element.
+  const current = pinnedItem.current.item;
   const next = useMemo(() => queue[(index + 1) % Math.max(queue.length, 1)], [index, queue]);
   const mediaToken = current ? `${current.id}:${current.cachedUrl}` : "";
   const currentIsImage = isImagePlaybackItem(current);
@@ -117,6 +124,10 @@ export function PlaybackStage({
     }
     transitionTimerRef.current = window.setTimeout(() => {
       transitionTimerRef.current = null;
+      pinnedItem.current = {
+        key: `${transitionIndex}:${transitionItem.id}:${transitionItem.url}:${transitionItem.storagePath}`,
+        item: transitionItem,
+      };
       setTransitionItem(null);
       setTransitionReady(false);
       setHeldItem(null);
@@ -131,7 +142,7 @@ export function PlaybackStage({
 
   useEffect(() => {
     if (!transitionItem) return;
-    const newIndex = queue.findIndex((item) => item.id === transitionItem.id && item.cachedUrl === transitionItem.cachedUrl);
+    const newIndex = queue.findIndex((item) => item.id === transitionItem.id && item.url === transitionItem.url);
     if (newIndex >= 0) {
       setTransitionIndex(newIndex);
     } else {
@@ -181,13 +192,16 @@ export function PlaybackStage({
     if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
   }, []);
 
+  const advanceRef = useRef(advance);
+  advanceRef.current = advance;
+
   useEffect(() => {
     if (isSingleImage || !isImagePlaybackItem(current) || transitionItem) return;
     const timeout = window.setTimeout(() => {
-      advance(playbackToken);
+      advanceRef.current(playbackToken);
     }, slideDuration * 1000);
     return () => window.clearTimeout(timeout);
-  }, [advance, current, isSingleImage, playbackToken, slideDuration, transitionItem]);
+  }, [current, isSingleImage, playbackToken, slideDuration, transitionItem]);
 
   const startVideoIfReady = useCallback(() => {
     const video = videoRef.current;

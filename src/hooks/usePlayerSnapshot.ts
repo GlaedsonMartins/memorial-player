@@ -179,14 +179,9 @@ export function usePlayerSnapshot(roomId: string, deviceId: string, authenticate
         console.debug("[usePlayerSnapshot] tribute.photos", tribute.photos);
         console.debug("[usePlayerSnapshot] tribute.videos", tribute.videos);
       }
-      // Replace the direct URLs with local object URLs as each cache pass
-      // completes, keeping the already visible first slide uninterrupted.
-      setQueue((current) => playbackQueue.map((item) => {
-        const existing = current.find((entry) => entry.id === item.id && entry.url === item.url);
-        // Preserve displayed sources after a successful first frame. Changing
-        // src to a blob would reload images and restart videos mid-playback.
-        return visibleTributeId === tribute.id && existing ? existing : item;
-      }));
+      // PlaybackStage pins the current source and timer; cached sources are
+      // picked up only when entering another slide.
+      setQueue(playbackQueue);
       void clearOldMedia([...media.map((item) => item.url), ...tracks.map((track) => track.url)]);
     }).catch((err: unknown) => {
       console.warn("Background media cache failed", err);
