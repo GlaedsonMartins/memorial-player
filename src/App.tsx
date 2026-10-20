@@ -1,5 +1,6 @@
 import { SetupPage } from "./pages/SetupPage";
-import { ResetSetupPage } from "./pages/ResetSetupPage";
+import { useEffect, useState } from "react";
+import { loadDeviceConfig } from "./cache/deviceConfigStore";
 import { RoomPlayerPage } from "./pages/RoomPlayerPage";
 import { useAutoHideCursor } from "./hooks/useAutoHideCursor";
 
@@ -18,9 +19,30 @@ function parseRoomId(pathname: string) {
 
 export function App() {
   useAutoHideCursor();
+  const [checked, setChecked] = useState(false);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void loadDeviceConfig().then((config) => {
+      if (cancelled) return;
+      if (config) {
+        const destination = `/sala/${encodeURIComponent(config.roomId)}`;
+        if (window.location.pathname !== destination) {
+          window.location.replace(destination);
+          return;
+        }
+      }
+      setChecked(true);
+    }).catch(() => { if (!cancelled) setFailed(true); });
+    return () => { cancelled = true; };
+  }, []);
+  if (!checked) return (
+    <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
+      {failed ? "Nao foi possivel verificar o dispositivo. Recarregue a pagina." : "Verificando dispositivo..."}
+    </main>
+  );
   const pathname = window.location.pathname;
-  if (pathname === "/setup/reset") return <ResetSetupPage />;
-  if (pathname === "/setup") return <SetupPage />;
+  if (/^\/setup(?:\/reset)?\/?$/.test(pathname)) return <SetupPage />;
 
   const roomId = parseRoomId(pathname);
   if (roomId) return <RoomPlayerPage routeRoomId={roomId} />;

@@ -22,7 +22,7 @@ export function RoomPlayerPage({ routeRoomId }: { routeRoomId: string | null }) 
   const player = usePlayerSnapshot(
     configuredRoomId,
     device.config?.deviceId ?? "",
-    Boolean(device.config && routeAllowed),
+    Boolean(device.config && device.user && routeAllowed),
   );
 
   const roomName = player.snapshot.room?.name ?? configuredRoomId;

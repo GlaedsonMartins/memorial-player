@@ -31,6 +31,7 @@ export function useDeviceSession({ redirectToSetup = true } = {}) {
     }
 
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
     async function waitForAuthRestore() {
       return new Promise<User | null>((resolve) => {
@@ -63,12 +64,15 @@ export function useDeviceSession({ redirectToSetup = true } = {}) {
         if (cancelled) return;
         setConfig(refreshed);
         setUser(getFirebaseAuth().currentUser);
+        setError(null);
       } catch (err) {
         if (stored?.setupCompleted && !isPermanentDeviceError(err)) {
           if (cancelled) return;
           setConfig(stored);
-          setUser(getFirebaseAuth().currentUser);
+          // A local registration is not proof of an authenticated session.
+          setUser(null);
           setError(err instanceof Error ? err.message : "Falha temporaria ao atualizar sessao.");
+          retryTimer = setTimeout(() => { if (!cancelled) void boot(); }, 10000);
           return;
         }
 
@@ -86,11 +90,12 @@ export function useDeviceSession({ redirectToSetup = true } = {}) {
 
     return () => {
       cancelled = true;
+      clearTimeout(retryTimer);
     };
   }, [redirectToSetup]);
 
   useEffect(() => {
-    if (!config) return;
+    if (!config || !user) return;
     return subscribeDevice(
       config.deviceId,
       (device) => {
@@ -101,7 +106,7 @@ export function useDeviceSession({ redirectToSetup = true } = {}) {
       },
       (err) => setError(err.message),
     );
-  }, [config]);
+  }, [config, user]);
 
   return { config, user, loading, error, configured: hasFirebaseConfig };
 }

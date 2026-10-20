@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { CheckCircle2, Loader2, MonitorUp, RotateCcw } from "lucide-react";
+import { CheckCircle2, Loader2, MonitorUp } from "lucide-react";
 import { saveDeviceConfig } from "../cache/deviceConfigStore";
 import type { DeviceConfig } from "../types/memorial";
 import { listActiveRooms, registerDevice } from "../services/deviceRegistrationService";
@@ -130,13 +130,6 @@ export function SetupPage() {
             Registrar Dispositivo
           </button>
 
-          <a
-            href="/setup/reset"
-            className="flex h-10 items-center justify-center gap-2 rounded-md border border-white/10 text-sm text-slate-300"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Reconfigurar este Player
-          </a>
         </div>
       </form>
     </main>

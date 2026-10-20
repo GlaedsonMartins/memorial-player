@@ -79,7 +79,11 @@ export function subscribeDevice(
 ) {
   return onSnapshot(
     doc(getFirebaseDb(), "devices", deviceId),
-    (snapshot) => callback(withDoc<RegisteredDevice>(snapshot.id, snapshot.data())),
+    (snapshot) => {
+      // An empty offline cache is not confirmation of remote deletion.
+      if (!snapshot.exists() && snapshot.metadata.fromCache) return;
+      callback(withDoc<RegisteredDevice>(snapshot.id, snapshot.data()));
+    },
     onError,
   );
 }
