@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FirestoreError, Unsubscribe } from "firebase/firestore";
 import { cacheMedia, clearOldMedia, revokeCachedObjectUrls } from "../cache/mediaCache";
 import { clearSnapshot, loadSnapshot, saveSnapshot } from "../cache/sessionStore";
@@ -36,6 +36,10 @@ export function usePlayerSnapshot(roomId: string, deviceId: string, authenticate
   const [queue, setQueue] = useState<PlaybackItem[]>([]);
   const [cachedTracks, setCachedTracks] = useState<Map<string, string>>(new Map());
   const lastSessionTributeId = useRef<string | null>(null);
+  const [visibleTributeId, setVisibleTributeId] = useState<string | null>(null);
+  const onMediaReady = useCallback(() => {
+    setVisibleTributeId(tribute?.id ?? null);
+  }, [tribute?.id]);
 
   const snapshot = useMemo<PlayerSnapshot>(
     () => ({ room, session, tribute, playlist, settings }),
@@ -63,7 +67,7 @@ export function usePlayerSnapshot(roomId: string, deviceId: string, authenticate
 
         if (shouldReset) {
           lastSessionTributeId.current = nextTributeId;
-          setTribute(null);
+          setTribute((current) => current?.id === nextTributeId ? current : null);
           setPlaylist(null);
           setQueue([]);
           setCachedTracks(new Map());
@@ -82,10 +86,13 @@ export function usePlayerSnapshot(roomId: string, deviceId: string, authenticate
     return () => disposeAll(unsubscribers);
   }, [authenticated, roomId]);
 
+  const targetTributeId = session && session.status !== "ENDED"
+    ? session.tributeId : room?.preparedTributeId;
+
   useEffect(() => {
-    if (!authenticated || !session?.tributeId || session.status === "ENDED") return;
+    if (!authenticated || !targetTributeId) return;
     return subscribeTribute(
-      session.tributeId,
+      targetTributeId,
       (nextTribute) => {
         setTribute(nextTribute);
         setState(nextTribute ? "SYNCING" : "IDLE");
@@ -95,7 +102,19 @@ export function usePlayerSnapshot(roomId: string, deviceId: string, authenticate
         setState("ERROR");
       },
     );
-  }, [authenticated, session?.status, session?.tributeId]);
+  }, [authenticated, targetTributeId]);
+
+  useEffect(() => {
+    if (!tribute || session?.status === "PLAYING") return;
+    const first = buildPlaybackQueue(tribute.photos ?? [], [], new Map())[0];
+    if (!first?.url) return;
+    // Warm the browser image cache without displaying the draft. The same
+    // URL is used by PlaybackStage when the start command arrives.
+    const image = new Image();
+    image.fetchPriority = "low";
+    image.src = first.url;
+    return () => { image.src = ""; };
+  }, [tribute, session?.status]);
 
   useEffect(() => {
     const playlistId = tribute?.playlistId ?? session?.playlistId;
@@ -111,7 +130,7 @@ export function usePlayerSnapshot(roomId: string, deviceId: string, authenticate
   }, [authenticated, session?.playlistId, session?.status, tribute?.playlistId]);
 
   useEffect(() => {
-    if (!tribute || session?.status !== "PLAYING") {
+    if (!tribute || tribute.id !== session?.tributeId || session?.status !== "PLAYING") {
       setQueue([]);
       revokeCachedObjectUrls();
       return;
@@ -125,9 +144,25 @@ export function usePlayerSnapshot(roomId: string, deviceId: string, authenticate
     const media = [...photos, ...videos].filter(
       (item) => typeof item?.url === "string" || typeof item?.storagePath === "string",
     );
+    // Start playback from the URLs already stored in Firestore. Downloading
+    // every photo, video and track is useful for offline playback, but must
+    // never block the first slide after the admin starts the tribute.
+    const immediateQueue = buildPlaybackQueue(photos, videos, new Map());
+    setQueue(immediateQueue);
+    setState(media.length > 0 ? "PLAYING" : "IDLE");
+
+    return;
+  }, [session?.status, tribute]);
+
+  useEffect(() => {
+    if (!tribute || session?.status !== "PLAYING") return;
+    const photos = Array.isArray(tribute.photos) ? tribute.photos : [];
+    const videos = Array.isArray(tribute.videos) ? tribute.videos : [];
+    const media = [...photos, ...videos];
     const tracks = Array.isArray(playlist?.tracks) ? playlist.tracks : [];
     let cancelled = false;
 
+    const timer = window.setTimeout(() => {
     void cacheMedia([...media, ...tracks]).then((cachedUrls) => {
       if (cancelled) return;
       const nextCachedTracks = new Map<string, string>();
@@ -144,15 +179,25 @@ export function usePlayerSnapshot(roomId: string, deviceId: string, authenticate
         console.debug("[usePlayerSnapshot] tribute.photos", tribute.photos);
         console.debug("[usePlayerSnapshot] tribute.videos", tribute.videos);
       }
-      setQueue(playbackQueue);
+      // Replace the direct URLs with local object URLs as each cache pass
+      // completes, keeping the already visible first slide uninterrupted.
+      setQueue((current) => playbackQueue.map((item) => {
+        const existing = current.find((entry) => entry.id === item.id && entry.url === item.url);
+        // Preserve displayed sources after a successful first frame. Changing
+        // src to a blob would reload images and restart videos mid-playback.
+        return visibleTributeId === tribute.id && existing ? existing : item;
+      }));
       void clearOldMedia([...media.map((item) => item.url), ...tracks.map((track) => track.url)]);
-      setState(media.length > 0 ? "PLAYING" : "IDLE");
+    }).catch((err: unknown) => {
+      console.warn("Background media cache failed", err);
     });
+    }, visibleTributeId === tribute.id ? 100 : 5000);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, [playlist?.tracks, session?.status, tribute]);
+  }, [playlist?.tracks, session?.status, tribute, visibleTributeId]);
 
   useEffect(() => {
     return () => revokeCachedObjectUrls();
@@ -199,5 +244,6 @@ export function usePlayerSnapshot(roomId: string, deviceId: string, authenticate
     cachedTracks,
     state,
     error,
+    onMediaReady,
   };
 }

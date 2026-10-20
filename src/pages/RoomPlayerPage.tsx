@@ -56,6 +56,8 @@ export function RoomPlayerPage({ routeRoomId }: { routeRoomId: string | null }) 
       {playing ? (
         <>
           <PlaybackStage
+            key={player.snapshot.tribute?.id}
+            onMediaReady={player.onMediaReady}
             queue={player.queue}
             slideDuration={slideDuration}
             audioSettings={audioSettings}

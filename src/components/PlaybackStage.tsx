@@ -40,11 +40,13 @@ export function PlaybackStage({
   slideDuration,
   audioSettings,
   onCurrentItemChange,
+  onMediaReady,
 }: {
   queue: PlaybackItem[];
   slideDuration: SlideDuration;
   audioSettings: AudioSettings;
   onCurrentItemChange: (item: PlaybackItem | null) => void;
+  onMediaReady: () => void;
 }) {
   const [index, setIndex] = useState(0);
   const [heldItem, setHeldItem] = useState<PlaybackItem | null>(null);
@@ -303,7 +305,10 @@ export function PlaybackStage({
       if (readyPartsRef.current.has("foreground") && readyPartsRef.current.has("background")) setTransitionReady(true);
     };
     const imageLoaded = async (image: HTMLImageElement, part: string) => {
-      if (!isTransition) return;
+      if (!isTransition) {
+        if (part === "foreground") onMediaReady();
+        return;
+      }
       const preparation = preparationRef.current;
       try {
         await image.decode();
@@ -344,6 +349,7 @@ export function PlaybackStage({
             className={foregroundClass}
             style={mediaStyle}
             draggable={false}
+            fetchPriority="high"
             onLoad={(event) => void imageLoaded(event.currentTarget, "foreground")}
             onError={() => isTransition ? skipFailedTransition() : advance(playbackToken)}
           />
@@ -356,7 +362,7 @@ export function PlaybackStage({
             playsInline
             preload="auto"
             ref={isTransition ? transitionVideoRef : videoRef}
-            onLoadedData={isTransition ? startTransitionVideoIfReady : startVideoIfReady}
+            onLoadedData={isTransition ? startTransitionVideoIfReady : () => { onMediaReady(); startVideoIfReady(); }}
             onCanPlay={isTransition ? startTransitionVideoIfReady : startVideoIfReady}
             onCanPlayThrough={isTransition ? startTransitionVideoIfReady : startVideoIfReady}
             onProgress={isTransition ? startTransitionVideoIfReady : startVideoIfReady}

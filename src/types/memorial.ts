@@ -42,6 +42,7 @@ export type PlayerState =
   | "ERROR";
 
 export interface Room {
+  preparedTributeId?: string | null;
   id: string;
   name: string;
   number: number;
