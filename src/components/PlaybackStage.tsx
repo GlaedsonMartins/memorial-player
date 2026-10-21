@@ -391,7 +391,7 @@ export function PlaybackStage({
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-black">
       {!isSingleImage && isImagePlaybackItem(next) && <img src={next.cachedUrl} alt="" className="hidden" draggable={false} />}
-      {!isImagePlaybackItem(next) && next?.cachedUrl !== current.cachedUrl && (
+      {next && !isImagePlaybackItem(next) && next.cachedUrl !== current.cachedUrl && (
         <video
           key={`preload-${next.id}`}
           src={next.cachedUrl}
