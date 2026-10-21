@@ -1,5 +1,5 @@
 import { SetupPage } from "./pages/SetupPage";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { loadDeviceConfig } from "./cache/deviceConfigStore";
 import { RoomPlayerPage } from "./pages/RoomPlayerPage";
 import { useAutoHideCursor } from "./hooks/useAutoHideCursor";
@@ -59,6 +59,7 @@ type FullscreenElement = HTMLElement & {
 };
 
 function FullscreenControl() {
+  const transition = useRef({ pending: false, blockedUntil: 0 });
   const [active, setActive] = useState(false);
   const [message, setMessage] = useState("");
   useEffect(() => {
@@ -73,6 +74,11 @@ function FullscreenControl() {
   }, []);
 
   const toggle = async () => {
+    // Some touch devices deliver more than one click during a fullscreen transition.
+    const guard = transition.current;
+    if (guard.pending || Date.now() < guard.blockedUntil) return;
+    guard.pending = true;
+    guard.blockedUntil = Date.now() + 1000;
     const doc = document as FullscreenDocument;
     const root = document.documentElement as FullscreenElement;
     setMessage("");
@@ -89,6 +95,9 @@ function FullscreenControl() {
       }
     } catch {
       setMessage("Não foi possível ativar a tela cheia. Toque no botão para tentar novamente.");
+    } finally {
+      guard.pending = false;
+      guard.blockedUntil = Date.now() + 1000;
     }
   };
 
@@ -96,7 +105,11 @@ function FullscreenControl() {
     <div className="fullscreen-controls fixed right-4 top-4 z-50 flex max-w-[calc(100vw-2rem)] flex-col items-end gap-2">
       <button
         type="button"
-        onClick={() => void toggle()}
+        onClick={(event) => {
+          event.stopPropagation();
+          if (event.detail > 1) return;
+          void toggle();
+        }}
         aria-pressed={active}
         aria-label={active ? "Sair da tela cheia" : "Entrar em tela cheia"}
         className="rounded-full border border-white/20 bg-black/70 px-4 py-3 text-sm text-white shadow-lg backdrop-blur focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"

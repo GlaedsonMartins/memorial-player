@@ -4,7 +4,7 @@ export function useKioskHardening() {
   useEffect(() => {
     const prevent = (event: Event) => event.preventDefault();
     const toggleFullscreen = (event: MouseEvent) => {
-      if (event.defaultPrevented || event.button !== 0) return;
+      if (!event.isTrusted || event.detail > 1 || event.defaultPrevented || event.button !== 0) return;
       const target = event.target;
       if (!(target instanceof Element)) return;
       // Keep controls independent and avoid toggling twice when their click bubbles.
