@@ -17,7 +17,7 @@ function parseRoomId(pathname: string) {
   return null;
 }
 
-export function App() {
+function AppContent() {
   useAutoHideCursor();
   const [checked, setChecked] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -48,4 +48,66 @@ export function App() {
   if (roomId) return <RoomPlayerPage routeRoomId={roomId} />;
 
   return <RoomPlayerPage routeRoomId={null} />;
+}
+
+type FullscreenDocument = Document & {
+  webkitFullscreenElement?: Element;
+  webkitExitFullscreen?: () => Promise<void> | void;
+};
+type FullscreenElement = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void;
+};
+
+function FullscreenControl() {
+  const [active, setActive] = useState(false);
+  const [message, setMessage] = useState("");
+  useEffect(() => {
+    const sync = () => setActive(Boolean(document.fullscreenElement || (document as FullscreenDocument).webkitFullscreenElement));
+    sync();
+    document.addEventListener("fullscreenchange", sync);
+    document.addEventListener("webkitfullscreenchange", sync);
+    return () => {
+      document.removeEventListener("fullscreenchange", sync);
+      document.removeEventListener("webkitfullscreenchange", sync);
+    };
+  }, []);
+
+  const toggle = async () => {
+    const doc = document as FullscreenDocument;
+    const root = document.documentElement as FullscreenElement;
+    setMessage("");
+    try {
+      if (document.fullscreenElement || doc.webkitFullscreenElement) {
+        if (document.exitFullscreen) await document.exitFullscreen();
+        else await doc.webkitExitFullscreen?.();
+      } else if (root.requestFullscreen) {
+        await root.requestFullscreen();
+      } else if (root.webkitRequestFullscreen) {
+        await root.webkitRequestFullscreen();
+      } else {
+        setMessage("Este navegador não oferece tela cheia. Tente abrir no Chrome ou instalar o aplicativo na tela inicial.");
+      }
+    } catch {
+      setMessage("Não foi possível ativar a tela cheia. Toque no botão para tentar novamente.");
+    }
+  };
+
+  return (
+    <div className="fullscreen-controls fixed right-4 top-4 z-50 flex max-w-[calc(100vw-2rem)] flex-col items-end gap-2">
+      <button
+        type="button"
+        onClick={() => void toggle()}
+        aria-pressed={active}
+        aria-label={active ? "Sair da tela cheia" : "Entrar em tela cheia"}
+        className="rounded-full border border-white/20 bg-black/70 px-4 py-3 text-sm text-white shadow-lg backdrop-blur focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+      >
+        {active ? "Sair da tela cheia" : "Tela cheia"}
+      </button>
+      {message && <p role="status" className="max-w-sm rounded-xl bg-black/85 p-3 text-sm text-white">{message}</p>}
+    </div>
+  );
+}
+
+export function App() {
+  return <><AppContent /><FullscreenControl /></>;
 }
