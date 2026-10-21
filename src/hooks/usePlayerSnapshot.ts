@@ -88,21 +88,37 @@ export function usePlayerSnapshot(roomId: string, deviceId: string, authenticate
 
   const targetTributeId = session && session.status !== "ENDED"
     ? session.tributeId : room?.preparedTributeId;
+  const tributeErrorRef = useRef<string | null>(null);
+  const isPreparing = !session || session.status === "ENDED";
 
   useEffect(() => {
+    setError((current) => current === tributeErrorRef.current ? null : current);
+    tributeErrorRef.current = null;
     if (!authenticated || !targetTributeId) return;
-    return subscribeTribute(
+    let active = true;
+    const unsubscribe = subscribeTribute(
       targetTributeId,
       (nextTribute) => {
+        if (!active) return;
+        setError((current) => current === tributeErrorRef.current ? null : current);
+        tributeErrorRef.current = null;
         setTribute(nextTribute);
         setState(nextTribute ? "SYNCING" : "IDLE");
       },
       (err) => {
+        if (!active) return;
+        if (isPreparing) {
+          setTribute(null);
+          setState("IDLE");
+          return;
+        }
+        tributeErrorRef.current = err.message;
         setError(err.message);
         setState("ERROR");
       },
     );
-  }, [authenticated, targetTributeId]);
+    return () => { active = false; unsubscribe(); };
+  }, [authenticated, targetTributeId, isPreparing]);
 
   useEffect(() => {
     if (!tribute || session?.status === "PLAYING") return;
