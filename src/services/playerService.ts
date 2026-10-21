@@ -8,7 +8,7 @@ import {
   type FirestoreError,
   type Unsubscribe,
 } from "firebase/firestore";
-import { getFirebaseDb } from "../firebase/client";
+import { getFirebaseDb, getFirebaseAuth } from "../firebase/client";
 import type {
   ActiveSession,
   PlayerSnapshot,
@@ -24,8 +24,32 @@ function withDoc<T>(id: string, data: DocumentData | undefined) {
   return data ? ({ id, ...data } as T) : null;
 }
 
+function reportReadError(path: string, callback: (error: FirestoreError) => void) {
+  return (error: FirestoreError) => {
+    const db = getFirebaseDb();
+    const user = getFirebaseAuth().currentUser;
+    const context = {
+      path, code: error.code, project: db.app.options.projectId,
+      database: import.meta.env.VITE_FIREBASE_DATABASE_ID || "(default)",
+      authenticated: Boolean(user),
+    };
+    console.error("[Memorial Player] Firestore read failed", context);
+    // Report only authorization fields, never credentials or download tokens.
+    void user?.getIdTokenResult().then(({ claims }) => {
+      console.error("[Memorial Player] Authorization context", {
+        ...context, device: claims.device === true, player: claims.player === true,
+        roomId: claims.roomId, deviceId: claims.deviceId,
+      });
+    }).catch(() => undefined);
+    const detailed = Object.assign(new Error(`[${path}] ${error.message}`), {
+      code: error.code, name: error.name,
+    }) as FirestoreError;
+    callback(detailed);
+  };
+}
+
 export function subscribeRoom(roomId: string, callback: (room: Room | null) => void, onError: (error: FirestoreError) => void) {
-  return onSnapshot(doc(getFirebaseDb(), "rooms", roomId), (snapshot) => callback(withDoc<Room>(snapshot.id, snapshot.data())), onError);
+  return onSnapshot(doc(getFirebaseDb(), "rooms", roomId), (snapshot) => callback(withDoc<Room>(snapshot.id, snapshot.data())), reportReadError(`rooms/${roomId}`, onError));
 }
 
 export function subscribeSession(
@@ -36,7 +60,7 @@ export function subscribeSession(
   return onSnapshot(
     doc(getFirebaseDb(), "active_sessions", roomId),
     (snapshot) => callback(withDoc<ActiveSession>(snapshot.id, snapshot.data())),
-    onError,
+    reportReadError(`active_sessions/${roomId}`, onError),
   );
 }
 
@@ -48,7 +72,7 @@ export function subscribeTribute(
   return onSnapshot(
     doc(getFirebaseDb(), "tributes", tributeId),
     (snapshot) => callback(withDoc<Tribute>(snapshot.id, snapshot.data())),
-    onError,
+    reportReadError(`tributes/${tributeId}`, onError),
   );
 }
 
@@ -60,7 +84,7 @@ export function subscribePlaylist(
   return onSnapshot(
     doc(getFirebaseDb(), "playlists", playlistId),
     (snapshot) => callback(withDoc<Playlist>(snapshot.id, snapshot.data())),
-    onError,
+    reportReadError(`playlists/${playlistId}`, onError),
   );
 }
 
@@ -68,7 +92,7 @@ export function subscribeSettings(callback: (settings: Settings | null) => void,
   return onSnapshot(
     doc(getFirebaseDb(), "settings", "general"),
     (snapshot) => callback(withDoc<Settings>(snapshot.id, snapshot.data())),
-    onError,
+    reportReadError("settings/general", onError),
   );
 }
 
@@ -84,7 +108,7 @@ export function subscribeDevice(
       if (!snapshot.exists() && snapshot.metadata.fromCache) return;
       callback(withDoc<RegisteredDevice>(snapshot.id, snapshot.data()));
     },
-    onError,
+    reportReadError(`devices/${deviceId}`, onError),
   );
 }
 
